@@ -10,9 +10,9 @@ Standalone [Morphe](https://morphe.software) patch pack for **Gboard Rambler** (
 </p>
 
 <details>
-  <summary>Preview: Exhaustive native <strong>Rambler voice typing</strong> settings screen</summary>
+  <summary>Preview: Native <strong>Rambler voice typing</strong> settings &amp; <strong>Per-app custom instructions</strong></summary>
   <p align="center">
-    <img src="assets/rambler-voice-typing-settings.png" alt="Exhaustive Rambler voice typing settings" width="360" />
+    <img src="assets/rambler-settings-and-rules-showcase.png" alt="Rambler voice typing settings and Per-app custom instructions" width="840" />
   </p>
 </details>
 
@@ -33,21 +33,21 @@ Standalone [Morphe](https://morphe.software) patch pack for **Gboard Rambler** (
 
 All 6 patches appear **directly inside Gboard Settings → Voice typing → Rambler voice typing** in native Material You style (as well as in the unified **Voice typing → Rambler Enhancements** screen). Only controls for the patches you selected in Morphe are shown:
 
-- **Custom instructions** — inline editor
+- **Custom instructions & Per-app custom instructions** — inline Default editor + per-app rules (apply custom instructions only to selected apps, create named style presets, or disable specific apps via a zero-permission searchable app picker)
 - **Waveform** — **Waveform animation (Hex)** (jumps straight into Listening/Processing style, colors, and Hex tuning)
 - **Voice dictionary & contacts** — live **Use dictionary words** switch + **Manage voice dictionary (MUSE_STATS)** + **Contact names sync** (alongside stock *Rambler dictionary* and *Clear all corrected words*)
-- **Dictation behavior** — live switches right on the page for **Append-only dictation**, **Cursor-aware editing**, and **App context**
+- **Dictation behavior** — live switches right on the page for **Append-only dictation**, **Cursor-aware editing**, **Re-select after edit** *(off by default)*, and **App context**
 
 1. **`Rambler Waveform Animation`** *(ported from [Hex by Anomaly](https://github.com/anomalyco/hex))*
    - Replaces Rambler's header light bar with Hex's **Listening** and **Processing** animations, independent colors, and minimal tuning (**Strip trace** vs **iOS halo**, dot spacing, glow strength, voice response).
 2. **`Rambler Custom Instructions`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches))*
-   - Enables persistent custom style/formatting rules sent with every Rambler dictation (e.g., *"Write all numbers as digits"*).
+   - Enables persistent custom style/formatting rules sent with Rambler dictations, plus **Per-app custom instructions** (keep Default empty to run only in selected apps, add named rules for different app groups, or exclude apps via **Disabled apps**).
 3. **`Rambler Personal Dictionary`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches))*
    - Enables Gboard's `UserFeatureCache` `MUSE_STATS` voice biasing dictionary with add, `.txt` import/export, remove, and clear controls.
 4. **`Rambler Contact Names`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches); depends on `Rambler Personal Dictionary`)*
    - Automatically seeds up to 1,000 phone contact names into Rambler's `MUSE_STATS` list (requires Android Contacts permission for Gboard) with manual sync & history reset.
 5. **`Rambler Cursor-Aware Editing`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches))*
-   - Enables cursor-aware editing, selected-text-only spoken edits, post-edit reselection, plus a live **Append-only dictation** switch (sends `0` surrounding text when nothing is selected so Rambler inserts purely at the cursor with clean boundary spacing).
+   - Enables cursor-aware editing, selected-text-only spoken edits, a live **Re-select after edit** toggle *(off by default so follow-up dictations append cleanly instead of re-editing)*, and a live **Append-only dictation** switch (sends `0` surrounding text when nothing is selected so Rambler inserts purely at the cursor with clean boundary spacing).
 6. **`Rambler App Context`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches))*
    - Enables sharing the active app name, input type, and field hint so Rambler adapts formatting to the current app (with a live toggle).
 
