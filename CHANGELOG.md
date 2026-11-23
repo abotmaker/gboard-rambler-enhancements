@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.7](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.6...v1.1.7) (2026-11-23)
+
+### ✨ New Features
+
+* **Gboard:** Add **Per-app custom instructions** in **Gboard Settings → Voice typing → Rambler voice typing** and **Rambler Enhancements**:
+  * **Default instruction + Named app rules:** keep Gboard's Default empty to apply custom instructions **only in selected apps** (with a one-tap **Use only in selected apps** quick-setup shortcut to move an existing Default prompt into an app rule), or define multiple named style rules for different app groups (optionally combining with Default).
+  * **Searchable installed-apps picker:** filter installed apps by name or package (plus manual package entry), backed by a zero-permission `<queries>` launcher manifest entry for Android 11–17.
+  * **Disabled apps:** exclude specific apps so no `<custom_instruction>` is ever sent there while keeping `<app_context>` untouched.
+
 ## [1.1.6](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.5...v1.1.6) (2026-11-23)
 
 ### ✨ Improvements

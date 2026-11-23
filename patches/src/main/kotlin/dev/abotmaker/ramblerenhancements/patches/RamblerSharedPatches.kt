@@ -57,6 +57,8 @@ internal const val WAVEFORM_RUNTIME_TYPE =
     "Ldev/abotmaker/ramblerenhancements/RamblerWaveformRuntime;"
 internal const val PREF_LAUNCHER_TYPE =
     "Ldev/abotmaker/ramblerenhancements/RamblerPreferenceLauncher;"
+internal const val CUSTOM_INSTR_RULES_TYPE =
+    "Ldev/abotmaker/ramblerenhancements/RamblerCustomInstructionRules;"
 
 internal enum class RamblerFeature {
     WAVEFORM,
@@ -75,6 +77,7 @@ internal class RamblerPatchRunState {
     var museStatsTargets: MuseStatsTargets? = null
     var prefsTargets: PrefsTargets? = null
     var prefLaunchTargets: PreferenceLaunchTargets? = null
+    var sessionBundleTargets: SessionBundleTargets? = null
     var agenticCtorHooked: Boolean = false
 }
 
@@ -154,12 +157,34 @@ internal val ramblerSharedExtensionPatch = bytecodePatch(
             }
         }
 
+        if (RamblerFeature.CUSTOM_INSTRUCTIONS in state.selectedFeatures) {
+            val agentic = state.agenticTargets ?: RamblerDynamicResolver.resolveAgenticExtension(this)
+                .also { state.agenticTargets = it }
+            val sessionBundle = RamblerDynamicResolver.resolveSessionBundleTargets(agentic.extensionClass)
+            state.sessionBundleTargets = sessionBundle
+            installPerAppCustomInstructionHook(sessionBundle)
+        }
+
         val prefLaunch = RamblerDynamicResolver.resolvePreferenceLaunchTargets(this)
         state.prefLaunchTargets = prefLaunch
         installExplicitPreferenceLaunchHook(prefLaunch)
 
         rewriteDynamicConfigClinit(state)
     }
+}
+
+private fun installPerAppCustomInstructionHook(targets: SessionBundleTargets) {
+    // Insert return hooks in reverse order first so index 0 stays stable for entry capture.
+    for ((retIndex, bundleReg) in targets.returnIndicesAndRegisters.asReversed()) {
+        targets.bundleMethod.addInstructions(
+            retIndex,
+            "invoke-static {v$bundleReg}, $CUSTOM_INSTR_RULES_TYPE->applyPerAppCustomInstruction(Landroid/os/Bundle;)V",
+        )
+    }
+    targets.bundleMethod.addInstructions(
+        0,
+        "invoke-static {p0}, $CUSTOM_INSTR_RULES_TYPE->captureSessionContext(Ljava/lang/Object;)V",
+    )
 }
 
 private fun installExplicitPreferenceLaunchHook(targets: PreferenceLaunchTargets) {
@@ -309,6 +334,11 @@ internal fun rewriteDynamicConfigClinitOnClass(
     putStr("PREF_CONTEXT_FIELD", prefLaunch?.contextField ?: "j")
     putStr("PREF_INTENT_FIELD", prefLaunch?.intentField ?: "s")
 
+    // AgenticDictationExtension fields for per-app custom instructions (resolved or 18.5.4 defaults)
+    val bundle = state.sessionBundleTargets
+    putStr("AGENTIC_CONTEXT_FIELD", bundle?.contextField ?: "b")
+    putStr("AGENTIC_EDITOR_INFO_FIELD", bundle?.editorInfoField ?: "h")
+
     sb.appendLine("return-void")
     clinit.addInstructions(0, sb.toString().trimIndent())
     configClass.methods.add(clinit)
@@ -428,6 +458,9 @@ internal val ramblerSharedSettingsResourcePatch = resourcePatch(
         //    so Android resolves it inside this exact Gboard/GboardWu package even after Package Rename.
         document("AndroidManifest.xml").use { manifestDoc ->
             registerSettingsActivity(manifestDoc)
+            if (RamblerFeature.CUSTOM_INSTRUCTIONS in selected) {
+                ensureLauncherQueries(manifestDoc)
+            }
         }
 
         // 2. Add settings strings (English + Traditional Chinese if present)
@@ -438,9 +471,12 @@ internal val ramblerSharedSettingsResourcePatch = resourcePatch(
                     "Hex waveform animations, custom instructions, voice dictionary, contacts, and dictation behavior",
                 "rambler_enh_custom_instruction_title" to "Custom instructions",
                 "rambler_enh_custom_instruction_summary" to
-                    "Style rules Rambler applies to everything you dictate, such as spelling, punctuation, or tone",
+                    "Default style rules applied to all apps unless overridden by Per-app rules (leave empty to use selected apps only)",
                 "rambler_enh_custom_instruction_hint" to
-                    "Added to Rambler instructions. For example: Write every number in digits.",
+                    "Default Rambler instructions. Leave empty if you only want Per-app rules to run.",
+                "rambler_enh_per_app_custom_instruction_title" to "Per-app custom instructions",
+                "rambler_enh_per_app_custom_instruction_summary" to
+                    "Apply custom instructions only to selected apps, create named app rules, or disable apps",
                 "rambler_enh_cat_waveform" to "Waveform",
                 "rambler_enh_pref_waveform_title" to "Waveform animation (Hex)",
                 "rambler_enh_pref_waveform_summary" to
@@ -553,8 +589,10 @@ private fun zhHantSettingsStrings(): List<Pair<String, String>> = listOf(
     "rambler_enhancements_entry_title" to "Rambler 增強功能",
     "rambler_enhancements_entry_summary" to "Hex 聲波動畫、自訂指示、語音辭典、聯絡人與聽寫行為設定",
     "rambler_enh_custom_instruction_title" to "自訂指示",
-    "rambler_enh_custom_instruction_summary" to "Rambler 每次語音輸入時套用的風格規則，例如拼字、標點或語氣",
-    "rambler_enh_custom_instruction_hint" to "會附加到 Rambler 的預設指示中。例如：所有數字一律使用阿拉伯數字。",
+    "rambler_enh_custom_instruction_summary" to "未符合各應用程式規則時套用的預設風格規則（留空即可僅在指定應用程式生效）",
+    "rambler_enh_custom_instruction_hint" to "預設 Rambler 自訂指示；若只想套用於特定應用程式請留空。",
+    "rambler_enh_per_app_custom_instruction_title" to "各應用程式自訂指示",
+    "rambler_enh_per_app_custom_instruction_summary" to "只對指定應用程式套用自訂指示、建立多組規則或停用特定應用程式",
     "rambler_enh_cat_waveform" to "聲波動畫",
     "rambler_enh_pref_waveform_title" to "聲波動畫 (Hex)",
     "rambler_enh_pref_waveform_summary" to "聆聽與處理動畫、配色與 Hex 細節微調",
@@ -578,22 +616,43 @@ private fun zhHantSettingsStrings(): List<Pair<String, String>> = listOf(
 
 internal fun addCustomInstructionPrefIdempotently(screenDoc: Document) {
     val root = screenDoc.documentElement
-    if (screenDoc.hasPreferenceKey(CUSTOM_INSTRUCTION_PREF_KEY)) {
-        return
-    }
     val categoryTag = root.preferredCategoryTag()
-    val category = screenDoc.createElement(categoryTag)
-    val field = screenDoc.createElement("EditTextPreference").apply {
-        setAndroidAttr("key", CUSTOM_INSTRUCTION_PREF_KEY)
-        setAndroidAttr("persistent", "true")
-        setAndroidAttr("defaultValue", "")
-        setAndroidAttr("title", "@string/rambler_enh_custom_instruction_title")
-        setAndroidAttr("summary", "@string/rambler_enh_custom_instruction_summary")
-        setAndroidAttr("dialogTitle", "@string/rambler_enh_custom_instruction_title")
-        setAndroidAttr("dialogMessage", "@string/rambler_enh_custom_instruction_hint")
+    val existingField = screenDoc.findPreferenceElementByKey(CUSTOM_INSTRUCTION_PREF_KEY)
+    val category: Element
+    if (existingField != null && existingField.parentNode is Element) {
+        category = existingField.parentNode as Element
+    } else {
+        category = screenDoc.createElement(categoryTag)
+        val field = screenDoc.createElement("EditTextPreference").apply {
+            setAndroidAttr("key", CUSTOM_INSTRUCTION_PREF_KEY)
+            setAndroidAttr("persistent", "true")
+            setAndroidAttr("defaultValue", "")
+            setAndroidAttr("title", "@string/rambler_enh_custom_instruction_title")
+            setAndroidAttr("summary", "@string/rambler_enh_custom_instruction_summary")
+            setAndroidAttr("dialogTitle", "@string/rambler_enh_custom_instruction_title")
+            setAndroidAttr("dialogMessage", "@string/rambler_enh_custom_instruction_hint")
+        }
+        category.appendChild(field)
+        root.insertBefore(category, root.firstChild)
     }
-    category.appendChild(field)
-    root.insertBefore(category, root.firstChild)
+    if (!screenDoc.hasPreferenceKey("rambler_enh_per_app_custom_instruction_entry")) {
+        val perAppPref = screenDoc.createElement("Preference").apply {
+            setAndroidAttr("key", "rambler_enh_per_app_custom_instruction_entry")
+            setAndroidAttr("persistent", "false")
+            setAndroidAttr("title", "@string/rambler_enh_per_app_custom_instruction_title")
+            setAndroidAttr("summary", "@string/rambler_enh_per_app_custom_instruction_summary")
+        }
+        val intent = screenDoc.createElement("intent").apply {
+            setAndroidAttr("action", OPEN_SETTINGS_ACTION)
+        }
+        val extra = screenDoc.createElement("extra").apply {
+            setAndroidAttr("name", "section")
+            setAndroidAttr("value", "custom_instructions")
+        }
+        intent.appendChild(extra)
+        perAppPref.appendChild(intent)
+        category.appendChild(perAppPref)
+    }
 }
 
 internal fun injectExhaustiveJetsonVoicePreferences(
@@ -747,15 +806,18 @@ internal fun injectExhaustiveJetsonVoicePreferences(
     }
 }
 
-private fun Document.hasPreferenceKey(key: String): Boolean {
+private fun Document.hasPreferenceKey(key: String): Boolean =
+    findPreferenceElementByKey(key) != null
+
+private fun Document.findPreferenceElementByKey(key: String): Element? {
     val all = getElementsByTagName("*")
     for (i in 0 until all.length) {
         val el = all.item(i) as? Element ?: continue
         if (el.androidAttr("key") == key) {
-            return true
+            return el
         }
     }
-    return false
+    return null
 }
 
 private fun Element.containsPreferenceKey(key: String): Boolean {
@@ -807,6 +869,38 @@ internal fun registerSettingsActivity(manifestDoc: Document) {
                 setAndroidAttr("name", "android.intent.category.DEFAULT")
             },
         )
+    }
+}
+
+internal fun ensureLauncherQueries(manifestDoc: Document) {
+    val manifest = manifestDoc.documentElement
+    val existingQueries = manifest.childElements("queries").firstOrNull()
+    val queries = existingQueries ?: manifestDoc.createElement("queries").also {
+        val appEl = manifest.childElements("application").firstOrNull()
+        if (appEl != null) {
+            manifest.insertBefore(it, appEl)
+        } else {
+            manifest.appendChild(it)
+        }
+    }
+    val hasLauncherIntent = queries.childElements("intent").any { intentEl ->
+        intentEl.childElements("action").any { it.androidAttr("name") == "android.intent.action.MAIN" } &&
+            intentEl.childElements("category").any { it.androidAttr("name") == "android.intent.category.LAUNCHER" }
+    }
+    if (!hasLauncherIntent) {
+        val intentEl = manifestDoc.createElement("intent").apply {
+            appendChild(
+                manifestDoc.createElement("action").apply {
+                    setAndroidAttr("name", "android.intent.action.MAIN")
+                },
+            )
+            appendChild(
+                manifestDoc.createElement("category").apply {
+                    setAndroidAttr("name", "android.intent.category.LAUNCHER")
+                },
+            )
+        }
+        queries.appendChild(intentEl)
     }
 }
 

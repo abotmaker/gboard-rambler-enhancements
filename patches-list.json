@@ -1,5 +1,5 @@
 {
-  "version": "1.1.6",
+  "version": "1.1.7",
   "patches": [
     {
       "name": "Rambler App Context",
@@ -44,7 +44,7 @@
     },
     {
       "name": "Rambler Custom Instructions",
-      "description": "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -\u003e Voice typing -\u003e Rambler voice typing and Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "description": "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) with Per-app custom instructions (named app rules, searchable app picker, and disabled apps) in Gboard Settings -\u003e Voice typing -\u003e Rambler voice typing and Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
       "use": true,
       "dependencies": [],
       "compatiblePackages": {

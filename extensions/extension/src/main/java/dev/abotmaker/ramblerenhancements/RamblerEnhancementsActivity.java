@@ -107,6 +107,7 @@ public final class RamblerEnhancementsActivity extends Activity {
 
     public static final String EXTRA_SECTION = "section";
     public static final String SECTION_WAVEFORM = "waveform";
+    public static final String SECTION_CUSTOM_INSTRUCTIONS = "custom_instructions";
     public static final String SECTION_DICTIONARY = "dictionary";
     public static final String SECTION_CONTACTS = "contacts";
 
@@ -115,6 +116,9 @@ public final class RamblerEnhancementsActivity extends Activity {
     private HexDotScopeSimulation.Stage previewStage = HexDotScopeSimulation.Stage.RECORDING;
     private String pendingExportPayload;
     private String activeSection;
+    private volatile List<RamblerCustomInstructionRules.AppEntry> installedAppsCache;
+    private volatile java.util.Map<String, String> packageLabelCache;
+    private volatile boolean loadingInstalledApps;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -219,6 +223,9 @@ public final class RamblerEnhancementsActivity extends Activity {
     private static String titleForSection(String section) {
         if (SECTION_WAVEFORM.equals(section)) {
             return "Waveform animation (Hex)";
+        }
+        if (SECTION_CUSTOM_INSTRUCTIONS.equals(section)) {
+            return "Per-app custom instructions";
         }
         if (SECTION_DICTIONARY.equals(section)) {
             return "Rambler voice dictionary";
@@ -415,26 +422,196 @@ public final class RamblerEnhancementsActivity extends Activity {
     }
 
     private void buildCustomInstructionsSection() {
-        addSectionHeader("Custom instructions");
+        ensureInstalledAppsLoadedAsync();
+        addSectionHeader("Custom instructions & app rules");
         String current = RamblerMuseStatsBridge.readCustomInstruction(this).trim();
+        List<RamblerCustomInstructionRules.Rule> rules =
+                RamblerCustomInstructionRules.readRules(this);
+        java.util.Set<String> disabledApps =
+                RamblerCustomInstructionRules.readDisabledApps(this);
+        java.util.Map<String, String> labels = packageLabelCache;
+
         addRow(
-                "Rambler custom instructions",
+                "Default instruction",
                 current.isEmpty()
-                        ? "Not set. Tap to add persistent style rules (spelling, tone, formatting)."
+                        ? "Empty — custom instructions only run in apps matched by a rule below."
                         : current,
-                current.isEmpty() ? "Edit" : "Set",
+                current.isEmpty() ? "Empty" : "Fallback",
                 true,
                 () -> showTextInputDialog(
-                        "Custom instructions",
-                        "Style rules applied to every Rambler dictation (e.g. Write numbers as digits).",
+                        "Default custom instruction",
+                        "Applied in apps without a matching rule. Leave blank to only use app rules below.",
                         current,
                         value -> {
                             boolean ok = RamblerMuseStatsBridge.writeCustomInstruction(this, value);
                             showToast(ok
-                                    ? "Custom instructions saved."
+                                    ? (value.trim().isEmpty()
+                                            ? "Default instruction cleared."
+                                            : "Default instruction saved.")
                                     : "Could not save custom instructions.");
                             refreshUi();
                         }));
+
+        if (!current.isEmpty() && rules.isEmpty()) {
+            addRow(
+                    "Use only in selected apps",
+                    "Move your current Default instruction into an app rule and pick which apps should use it (clears Default).",
+                    "Quick setup",
+                    true,
+                    () -> withInstalledApps((apps, map) -> RamblerAppRuleDialogs.showAppPickerDialog(
+                            this,
+                            "Choose apps for your custom instruction",
+                            "Your current prompt will only be sent in these apps and cleared as Default.",
+                            Collections.<String>emptyList(),
+                            apps,
+                            picked -> {
+                                if (picked.isEmpty()) {
+                                    showToast("No apps selected; Default instruction unchanged.");
+                                    return;
+                                }
+                                RamblerCustomInstructionRules.Rule rule =
+                                        new RamblerCustomInstructionRules.Rule(
+                                                "rule_" + System.currentTimeMillis(),
+                                                "Selected apps",
+                                                current,
+                                                picked,
+                                                false);
+                                RamblerCustomInstructionRules.upsertRule(this, rule);
+                                RamblerMuseStatsBridge.writeCustomInstruction(this, "");
+                                showToast("Applied custom instruction to " + picked.size() + " app(s).");
+                                refreshUi();
+                            })));
+        }
+
+        for (RamblerCustomInstructionRules.Rule rule : rules) {
+            String appSummary = RamblerCustomInstructionRules.formatPackageList(
+                    rule.packages, labels, 4);
+            String promptPreview = rule.instruction.length() > 96
+                    ? rule.instruction.substring(0, 96) + "…"
+                    : rule.instruction;
+            String modeTag = rule.combineWithDefault ? " · +Default" : "";
+            addRow(
+                    rule.displayName(),
+                    appSummary + modeTag + "\n" + promptPreview,
+                    rule.packages.size() + (rule.packages.size() == 1 ? " app" : " apps"),
+                    true,
+                    () -> withInstalledApps((apps, map) -> RamblerAppRuleDialogs.showRuleEditorDialog(
+                            this,
+                            rule,
+                            null,
+                            null,
+                            apps,
+                            map,
+                            updated -> {
+                                RamblerCustomInstructionRules.upsertRule(this, updated);
+                                showToast("Saved \"" + updated.displayName() + "\".");
+                                refreshUi();
+                            },
+                            () -> showConfirmDialog(
+                                    "Delete \"" + rule.displayName() + "\"?",
+                                    "Apps in this rule will fall back to your Default instruction.",
+                                    () -> {
+                                        RamblerCustomInstructionRules.deleteRule(this, rule.id);
+                                        showToast("Deleted rule.");
+                                        refreshUi();
+                                    }))));
+        }
+
+        addRow(
+                "+ Add app rule",
+                "Create a named custom instruction for one or more apps (replaces or combines with Default).",
+                "Add",
+                true,
+                () -> withInstalledApps((apps, map) -> RamblerAppRuleDialogs.showRuleEditorDialog(
+                        this,
+                        null,
+                        "",
+                        "",
+                        apps,
+                        map,
+                        created -> {
+                            RamblerCustomInstructionRules.upsertRule(this, created);
+                            showToast("Added \"" + created.displayName() + "\".");
+                            refreshUi();
+                        },
+                        null)));
+
+        addRow(
+                "Disabled apps",
+                disabledApps.isEmpty()
+                        ? "Never send any custom instructions in chosen apps (overrides Default and all rules)."
+                        : RamblerCustomInstructionRules.formatPackageList(disabledApps, labels, 5),
+                disabledApps.isEmpty() ? "0 apps" : (disabledApps.size()
+                        + (disabledApps.size() == 1 ? " app" : " apps")),
+                true,
+                () -> withInstalledApps((apps, map) -> RamblerAppRuleDialogs.showAppPickerDialog(
+                        this,
+                        "Disabled apps",
+                        "Custom instructions will never be sent in these apps.",
+                        disabledApps,
+                        apps,
+                        picked -> {
+                            RamblerCustomInstructionRules.writeDisabledApps(this, picked);
+                            showToast(picked.isEmpty()
+                                    ? "Cleared disabled apps."
+                                    : "Disabled custom instructions in " + picked.size() + " app(s).");
+                            refreshUi();
+                        })));
+    }
+
+    private interface InstalledAppsCallback {
+        void onReady(
+                List<RamblerCustomInstructionRules.AppEntry> apps,
+                java.util.Map<String, String> labels);
+    }
+
+    private void ensureInstalledAppsLoadedAsync() {
+        if (installedAppsCache != null || loadingInstalledApps) {
+            return;
+        }
+        loadingInstalledApps = true;
+        runAsync(() -> {
+            List<RamblerCustomInstructionRules.AppEntry> apps =
+                    RamblerCustomInstructionRules.loadInstalledLauncherApps(this);
+            java.util.Map<String, String> labels = new java.util.HashMap<String, String>();
+            for (RamblerCustomInstructionRules.AppEntry entry : apps) {
+                labels.put(entry.packageName, entry.label);
+            }
+            installedAppsCache = apps;
+            packageLabelCache = labels;
+            loadingInstalledApps = false;
+            mainHandler.post(() -> {
+                if (!isFinishing()) {
+                    refreshUi();
+                }
+            });
+        });
+    }
+
+    private void withInstalledApps(InstalledAppsCallback callback) {
+        List<RamblerCustomInstructionRules.AppEntry> cached = installedAppsCache;
+        java.util.Map<String, String> cachedLabels = packageLabelCache;
+        if (cached != null && cachedLabels != null) {
+            callback.onReady(cached, cachedLabels);
+            return;
+        }
+        showToast("Loading installed apps…");
+        runAsync(() -> {
+            List<RamblerCustomInstructionRules.AppEntry> apps =
+                    RamblerCustomInstructionRules.loadInstalledLauncherApps(this);
+            java.util.Map<String, String> labels = new java.util.HashMap<String, String>();
+            for (RamblerCustomInstructionRules.AppEntry entry : apps) {
+                labels.put(entry.packageName, entry.label);
+            }
+            installedAppsCache = apps;
+            packageLabelCache = labels;
+            loadingInstalledApps = false;
+            mainHandler.post(() -> {
+                if (!isFinishing()) {
+                    callback.onReady(apps, labels);
+                }
+            });
+        });
     }
 
     private void buildPersonalDictionarySection() {

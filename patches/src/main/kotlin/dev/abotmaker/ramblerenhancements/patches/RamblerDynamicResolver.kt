@@ -104,9 +104,18 @@ internal data class PreferenceLaunchTargets(
     val intentField: String,
 )
 
+internal data class SessionBundleTargets(
+    val bundleMethod: MutableMethod,
+    val contextField: String,
+    val editorInfoField: String,
+    val returnIndicesAndRegisters: List<Pair<Int, Int>>,
+)
+
 internal object RamblerDynamicResolver {
     private const val CONTEXT_TYPE = "Landroid/content/Context;"
     private const val INTENT_TYPE = "Landroid/content/Intent;"
+    private const val BUNDLE_TYPE = "Landroid/os/Bundle;"
+    private const val EDITOR_INFO_TYPE = "Landroid/view/inputmethod/EditorInfo;"
     private const val ANDROIDX_PREFERENCE_TYPE = "Landroidx/preference/Preference;"
     private const val VIEW_TYPE = "Landroid/view/View;"
     private const val CANVAS_TYPE = "Landroid/graphics/Canvas;"
@@ -377,6 +386,73 @@ internal object RamblerDynamicResolver {
             extensionClass = extensionClass,
             contextConstructor = ctor,
             contextParamIndex = 1, // p0 = this, p1 = Context
+        )
+    }
+
+    fun resolveSessionBundleTargets(extensionClass: MutableClass): SessionBundleTargets {
+        val bundleMethod = extensionClass.methods.singleOrNull { method ->
+            method.returnType == BUNDLE_TYPE &&
+                method.containsString("user_preferences") &&
+                method.containsString("{CUSTOM_INSTRUCTION}")
+        } ?: throw PatchException(
+            "Could not uniquely locate AgenticDictationExtension Bundle builder containing " +
+                "'user_preferences' and '{CUSTOM_INSTRUCTION}' on ${extensionClass.type}",
+        )
+
+        val impl = bundleMethod.implementation
+            ?: throw PatchException("Session Bundle builder ${bundleMethod.name} has no body")
+        val insns = impl.instructions.toList()
+
+        val contextField = insns.firstNotNullOfOrNull { insn ->
+            val ref = (insn as? ReferenceInstruction)?.reference as? FieldReference
+            if (insn.opcode == Opcode.IGET_OBJECT &&
+                ref?.definingClass == extensionClass.type &&
+                ref.type == CONTEXT_TYPE
+            ) {
+                ref.name
+            } else {
+                null
+            }
+        } ?: extensionClass.instanceFields.firstOrNull { it.type == CONTEXT_TYPE }?.name
+            ?: throw PatchException("Could not resolve Context field on ${extensionClass.type}")
+
+        val editorInfoField = insns.firstNotNullOfOrNull { insn ->
+            val ref = (insn as? ReferenceInstruction)?.reference as? FieldReference
+            if (insn.opcode == Opcode.IGET_OBJECT &&
+                ref?.definingClass == extensionClass.type &&
+                ref.type == EDITOR_INFO_TYPE
+            ) {
+                ref.name
+            } else {
+                null
+            }
+        } ?: extensionClass.instanceFields.firstOrNull { it.type == EDITOR_INFO_TYPE }?.name
+            ?: throw PatchException("Could not resolve EditorInfo field on ${extensionClass.type}")
+
+        val returns = insns.mapIndexedNotNull { idx, insn ->
+            if (insn.opcode == Opcode.RETURN_OBJECT) {
+                idx to (insn as OneRegisterInstruction).registerA
+            } else {
+                null
+            }
+        }
+        if (returns.isEmpty()) {
+            throw PatchException("Session Bundle builder ${bundleMethod.name} has no return-object")
+        }
+        val paramWords = bundleMethod.parameterTypes.sumOf {
+            if (it.toString() == "J" || it.toString() == "D") 2 else 1
+        }
+        val thisReg = impl.registerCount - 1 - paramWords
+        if (thisReg > 15 || returns.any { (_, reg) -> reg > 15 }) {
+            throw PatchException(
+                "Session Bundle builder registers exceed 4-bit invoke range: this=v$thisReg, returns=$returns",
+            )
+        }
+        return SessionBundleTargets(
+            bundleMethod = bundleMethod,
+            contextField = contextField,
+            editorInfoField = editorInfoField,
+            returnIndicesAndRegisters = returns,
         )
     }
 

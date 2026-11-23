@@ -66,6 +66,10 @@ public final class RamblerDynamicConfig {
     public static String PREF_CONTEXT_FIELD = "j";
     public static String PREF_INTENT_FIELD = "s";
 
+    // AgenticDictationExtension fields for per-app custom instructions (fhv in Gboard 18.5.4)
+    public static String AGENTIC_CONTEXT_FIELD = "b";
+    public static String AGENTIC_EDITOR_INFO_FIELD = "h";
+
     private RamblerDynamicConfig() {
     }
 }

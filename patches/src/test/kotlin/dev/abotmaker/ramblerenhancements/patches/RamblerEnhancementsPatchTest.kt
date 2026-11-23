@@ -58,10 +58,15 @@ class RamblerEnhancementsPatchTest {
         )
         registerSettingsActivity(manifest)
         registerSettingsActivity(manifest)
+        ensureLauncherQueries(manifest)
+        ensureLauncherQueries(manifest)
         val activities = manifest.documentElement.childElements("application").single().childElements("activity")
         assertEquals(1, activities.size)
         assertEquals("false", activities.single().androidAttr("exported"))
         assertEquals(SETTINGS_ACTIVITY_CLASS, activities.single().androidAttr("name"))
+        val queries = manifest.documentElement.childElements("queries")
+        assertEquals(1, queries.size)
+        assertEquals(1, queries.single().childElements("intent").size)
 
         val screen = parseXml(
             """
@@ -77,11 +82,15 @@ class RamblerEnhancementsPatchTest {
         injectExhaustiveJetsonVoicePreferences(screen, allFeatures)
         injectExhaustiveJetsonVoicePreferences(screen, allFeatures)
 
-        // Custom instructions is placed first, Help and feedback stays last.
+        // Custom instructions + Per-app custom instructions are placed first, Help and feedback stays last.
         val topChildren = screen.documentElement.childElements()
         assertEquals(
             CUSTOM_INSTRUCTION_PREF_KEY,
             topChildren.first().childElements("EditTextPreference").single().androidAttr("key"),
+        )
+        assertEquals(
+            "rambler_enh_per_app_custom_instruction_entry",
+            topChildren.first().childElements("Preference").single().androidAttr("key"),
         )
         assertEquals(
             "pref_key_jetson_feedback",

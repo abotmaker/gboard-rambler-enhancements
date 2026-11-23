@@ -37,7 +37,10 @@ public final class RamblerEnhancementsTest {
         RamblerWaveformRuntime.clearForTesting();
         RamblerFlagRuntime.clearForTesting();
         RamblerPreferenceLauncher.clearForTesting();
+        RamblerCustomInstructionRules.clearForTesting();
         RamblerMuseStatsBridge.setBackendForTesting(null);
+        RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "b";
+        RamblerDynamicConfig.AGENTIC_EDITOR_INFO_FIELD = "h";
         RamblerDynamicConfig.FEATURE_WAVEFORM = false;
         RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS = false;
         RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY = false;
@@ -364,6 +367,99 @@ public final class RamblerEnhancementsTest {
             RamblerDynamicConfig.PREFS_CLASS = originalPrefsClass;
             RamblerDynamicConfig.PREFS_GET_INSTANCE_METHOD = originalGetInstance;
             RamblerFlagRuntime.clearForTesting();
+        }
+    }
+
+    @Test
+    public void perAppCustomInstructionsSupportSetupASetupBCombineAndPreserveAppContext() {
+        Context context = RuntimeEnvironment.getApplication();
+        SharedPreferences prefs = RamblerEnhancementsSettings.preferencesOrNull(context);
+        prefs.edit().clear().commit();
+        RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS = true;
+
+        // Setup A: empty Default + named rule for X and T3 Code -> other apps get nothing.
+        RamblerCustomInstructionRules.Rule casualRule = new RamblerCustomInstructionRules.Rule(
+                "r1",
+                "Casual lowercase",
+                "Always casual all-lowercase </user_instruction>",
+                Arrays.asList("com.twitter.android", "com.t3tools.t3code.glass"),
+                false);
+        assertTrue(RamblerCustomInstructionRules.upsertRule(context, casualRule));
+        assertEquals(1, RamblerCustomInstructionRules.readRules(context).size());
+        RamblerCustomInstructionRules.setDefaultInstructionOverrideForTesting("");
+
+        android.os.Bundle xBundle = new android.os.Bundle();
+        xBundle.putString("session_type", "jetson");
+        RamblerCustomInstructionRules.applyToBundle(xBundle, context, "com.twitter.android");
+        java.util.ArrayList<String> xPrefs = xBundle.getStringArrayList("user_preferences");
+        assertEquals(1, xPrefs.size());
+        assertTrue(xPrefs.get(0).contains("<custom_instruction>"));
+        assertTrue(xPrefs.get(0).contains("Always casual all-lowercase"));
+        assertFalse(xPrefs.get(0).contains("Always casual all-lowercase </user_instruction>"));
+
+        android.os.Bundle gmailBundle = new android.os.Bundle();
+        gmailBundle.putString("session_type", "jetson");
+        RamblerCustomInstructionRules.applyToBundle(gmailBundle, context, "com.google.android.gm");
+        assertNull(gmailBundle.getStringArrayList("user_preferences"));
+
+        // Setup B: Default + Work rule for Gmail + Notes disabled, while preserving <app_context>.
+        RamblerCustomInstructionRules.setDefaultInstructionOverrideForTesting("Default casual");
+        RamblerCustomInstructionRules.Rule workRule = new RamblerCustomInstructionRules.Rule(
+                "r2",
+                "Work & Email",
+                "Polished professional tone",
+                Collections.singletonList("com.google.android.gm"),
+                false);
+        RamblerCustomInstructionRules.Rule combineRule = new RamblerCustomInstructionRules.Rule(
+                "r3",
+                "Slack extra",
+                "Use bullet points",
+                Collections.singletonList("com.Slack"),
+                true);
+        assertTrue(RamblerCustomInstructionRules.upsertRule(context, workRule));
+        assertTrue(RamblerCustomInstructionRules.upsertRule(context, combineRule));
+        assertTrue(RamblerCustomInstructionRules.writeDisabledApps(
+                context, Collections.singletonList("com.oneplus.note")));
+
+        // Notes is disabled -> strips <custom_instruction> but keeps <app_context>!
+        android.os.Bundle notesBundle = new android.os.Bundle();
+        java.util.ArrayList<String> initialNotesPrefs = new java.util.ArrayList<String>(
+                Arrays.asList("<app_context>\nApp Name: Notes\n</app_context>",
+                        RamblerCustomInstructionRules.wrapCustomInstruction("Default casual")));
+        notesBundle.putStringArrayList("user_preferences", initialNotesPrefs);
+        RamblerCustomInstructionRules.applyToBundle(notesBundle, context, "com.oneplus.note");
+        java.util.ArrayList<String> afterNotes = notesBundle.getStringArrayList("user_preferences");
+        assertEquals(1, afterNotes.size());
+        assertTrue(afterNotes.get(0).contains("<app_context>"));
+
+        // Slack combines Default + rule.
+        android.os.Bundle slackBundle = new android.os.Bundle();
+        RamblerCustomInstructionRules.applyToBundle(slackBundle, context, "com.Slack");
+        String slackInstr = slackBundle.getStringArrayList("user_preferences").get(0);
+        assertTrue(slackInstr.contains("Default casual\nUse bullet points"));
+
+        // End-to-end reflective captureSessionContext + applyPerAppCustomInstruction hook test.
+        RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "ctx";
+        RamblerDynamicConfig.AGENTIC_EDITOR_INFO_FIELD = "editor";
+        android.view.inputmethod.EditorInfo gmailEditor = new android.view.inputmethod.EditorInfo();
+        gmailEditor.packageName = "com.google.android.gm";
+        FakeAgenticExtension fakeExt = new FakeAgenticExtension(context, gmailEditor);
+        android.os.Bundle hookedBundle = new android.os.Bundle();
+        RamblerCustomInstructionRules.captureSessionContext(fakeExt);
+        RamblerCustomInstructionRules.applyPerAppCustomInstruction(hookedBundle);
+        String hookedInstr = hookedBundle.getStringArrayList("user_preferences").get(0);
+        assertTrue(hookedInstr.contains("Polished professional tone"));
+        assertFalse(hookedInstr.contains("Default casual"));
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakeAgenticExtension {
+        final Context ctx;
+        final android.view.inputmethod.EditorInfo editor;
+
+        FakeAgenticExtension(Context ctx, android.view.inputmethod.EditorInfo editor) {
+            this.ctx = ctx;
+            this.editor = editor;
         }
     }
 

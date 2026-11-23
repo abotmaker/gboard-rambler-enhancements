@@ -82,7 +82,7 @@ val ramblerWaveformAnimationPatch = bytecodePatch(
 @Suppress("unused")
 val ramblerCustomInstructionsPatch = bytecodePatch(
     name = "Rambler Custom Instructions",
-    description = "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -> Voice typing -> Rambler voice typing and Rambler Enhancements. $VERSION_NOTE",
+    description = "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) with Per-app custom instructions (named app rules, searchable app picker, and disabled apps) in Gboard Settings -> Voice typing -> Rambler voice typing and Rambler Enhancements. $VERSION_NOTE",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD)
