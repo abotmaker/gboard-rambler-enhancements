@@ -131,6 +131,7 @@ public final class RamblerEnhancementsActivity extends Activity {
 
         RamblerWaveformDialogs.Palette pal = RamblerWaveformDialogs.palette(this);
         ScrollView scroll = new ScrollView(this);
+        scroll.setFitsSystemWindows(true);
         scroll.setBackgroundColor(pal.background);
         scroll.setFillViewport(true);
 

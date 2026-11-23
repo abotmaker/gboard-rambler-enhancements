@@ -1,7 +1,7 @@
 {
-  "created_at": "2026-11-23T15:10:00",
+  "created_at": "2026-11-23T17:00:00",
   "description": "Standalone Morphe patches for Gboard Rambler: exhaustive native Rambler voice typing settings page with Hex by Anomaly Listening & Processing waveforms, Custom Instructions, Personal Dictionary (MUSE_STATS + Use dictionary words toggle), Contact Names, Cursor-Aware & Append-Only Editing, and App Context. Designed to work alongside upstream GboardWu. Verified on Gboard 18.5.4; newer versions are unverified.",
-  "download_url": "https://github.com/abotmaker/gboard-rambler-enhancements/releases/download/v1.1.0/patches-1.1.0.mpp",
+  "download_url": "https://github.com/abotmaker/gboard-rambler-enhancements/releases/download/v1.1.1/patches-1.1.1.mpp",
   "signature_download_url": "",
-  "version": "1.1.0"
+  "version": "1.1.1"
 }

@@ -62,6 +62,10 @@ public final class RamblerDynamicConfig {
     public static String PREFS_READ_STRING_METHOD = "d";
     public static String PREFS_WRITE_STRING_METHOD = "i";
 
+    // AndroidX Preference (Landroidx/preference/Preference;)
+    public static String PREF_CONTEXT_FIELD = "j";
+    public static String PREF_INTENT_FIELD = "s";
+
     private RamblerDynamicConfig() {
     }
 }

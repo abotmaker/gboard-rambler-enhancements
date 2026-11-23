@@ -1,6 +1,7 @@
 package dev.abotmaker.ramblerenhancements.patches
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.removeInstructions
 import app.morphe.patcher.patch.AppTarget
 import app.morphe.patcher.patch.BytecodePatchContext
@@ -12,6 +13,7 @@ import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod.Companion.toMutable
+import app.morphe.patcher.util.smali.ExternalLabel
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.builder.MutableMethodImplementation
@@ -58,6 +60,8 @@ internal const val CONTACTS_RUNTIME_TYPE =
     "Ldev/abotmaker/ramblerenhancements/RamblerContactsRuntime;"
 internal const val WAVEFORM_RUNTIME_TYPE =
     "Ldev/abotmaker/ramblerenhancements/RamblerWaveformRuntime;"
+internal const val PREF_LAUNCHER_TYPE =
+    "Ldev/abotmaker/ramblerenhancements/RamblerPreferenceLauncher;"
 
 internal enum class RamblerFeature {
     WAVEFORM,
@@ -75,6 +79,7 @@ internal class RamblerPatchRunState {
     var waveformTargets: WaveformTargets? = null
     var museStatsTargets: MuseStatsTargets? = null
     var prefsTargets: PrefsTargets? = null
+    var prefLaunchTargets: PreferenceLaunchTargets? = null
     var agenticCtorHooked: Boolean = false
 }
 
@@ -150,8 +155,34 @@ internal val ramblerSharedExtensionPatch = bytecodePatch(
             }
         }
 
+        val prefLaunch = RamblerDynamicResolver.resolvePreferenceLaunchTargets(this)
+        state.prefLaunchTargets = prefLaunch
+        installExplicitPreferenceLaunchHook(prefLaunch)
+
         rewriteDynamicConfigClinit(state)
     }
+}
+
+private fun installExplicitPreferenceLaunchHook(targets: PreferenceLaunchTargets) {
+    val impl = targets.performClickMethod.implementation
+        ?: throw PatchException("Preference.performClick has no implementation")
+    if (impl.registerCount !in 2..16) {
+        throw PatchException(
+            "Preference.performClick register count out of range: ${impl.registerCount}",
+        )
+    }
+    val firstInsn = impl.instructions.firstOrNull()
+        ?: throw PatchException("Preference.performClick has no instructions")
+    targets.performClickMethod.addInstructionsWithLabels(
+        0,
+        """
+        invoke-static {p0}, $PREF_LAUNCHER_TYPE->maybeLaunch(Ljava/lang/Object;)Z
+        move-result v0
+        if-eqz v0, :rambler_stock_pref_click
+        return-void
+        """.trimIndent(),
+        ExternalLabel("rambler_stock_pref_click", firstInsn),
+    )
 }
 
 private fun installConflictFreeFlagHook(targets: FlagTargets) {
@@ -259,6 +290,11 @@ private fun BytecodePatchContext.rewriteDynamicConfigClinit(state: RamblerPatchR
     putStr("PREFS_GET_INSTANCE_METHOD", prefs?.getInstanceMethod ?: "I")
     putStr("PREFS_READ_STRING_METHOD", prefs?.readStringMethod ?: "d")
     putStr("PREFS_WRITE_STRING_METHOD", prefs?.writeStringMethod ?: "i")
+
+    // AndroidX Preference launch bindings (resolved or 18.5.4 defaults)
+    val prefLaunch = state.prefLaunchTargets
+    putStr("PREF_CONTEXT_FIELD", prefLaunch?.contextField ?: "j")
+    putStr("PREF_INTENT_FIELD", prefLaunch?.intentField ?: "s")
 
     sb.appendLine("return-void")
     clinit.addInstructions(0, sb.toString().trimIndent())

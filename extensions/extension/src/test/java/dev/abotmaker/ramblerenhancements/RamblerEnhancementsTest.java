@@ -36,6 +36,7 @@ public final class RamblerEnhancementsTest {
     public void tearDown() {
         RamblerWaveformRuntime.clearForTesting();
         RamblerFlagRuntime.clearForTesting();
+        RamblerPreferenceLauncher.clearForTesting();
         RamblerMuseStatsBridge.setBackendForTesting(null);
         RamblerDynamicConfig.FEATURE_WAVEFORM = false;
         RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS = false;
@@ -272,6 +273,43 @@ public final class RamblerEnhancementsTest {
         assertTrue(RamblerEnhancementsSettings.readAppendOnly(context));
         assertTrue(RamblerEnhancementsSettings.writeAppContextEnabled(context, false));
         assertFalse(RamblerEnhancementsSettings.readAppContextEnabled(context));
+    }
+
+    @Test
+    public void preferenceLauncherConvertsImplicitActionToExplicitOwnPackageIntent() {
+        Context context = RuntimeEnvironment.getApplication();
+        android.content.Intent implicit = new android.content.Intent(
+                RamblerPreferenceLauncher.ACTION_OPEN_SETTINGS);
+        implicit.putExtra(
+                RamblerEnhancementsActivity.EXTRA_SECTION,
+                RamblerEnhancementsActivity.SECTION_WAVEFORM);
+
+        android.content.Intent explicit =
+                RamblerPreferenceLauncher.buildExplicitIntent(context, implicit);
+        assertEquals(context.getPackageName(), explicit.getComponent().getPackageName());
+        assertEquals(
+                RamblerEnhancementsActivity.class.getName(),
+                explicit.getComponent().getClassName());
+        assertEquals(
+                RamblerEnhancementsActivity.SECTION_WAVEFORM,
+                explicit.getStringExtra(RamblerEnhancementsActivity.EXTRA_SECTION));
+
+        // Unrelated preferences pass through untouched
+        FakePreference unrelated = new FakePreference(
+                context, new android.content.Intent("android.intent.action.VIEW"));
+        assertFalse(RamblerPreferenceLauncher.maybeLaunch(unrelated));
+        assertFalse(RamblerPreferenceLauncher.maybeLaunch(new FakePreference(context, null)));
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakePreference {
+        final Context j;
+        final android.content.Intent s;
+
+        FakePreference(Context j, android.content.Intent s) {
+            this.j = j;
+            this.s = s;
+        }
     }
 
     @SuppressWarnings("unused")

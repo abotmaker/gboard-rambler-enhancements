@@ -97,8 +97,17 @@ internal data class PrefsTargets(
     val writeStringMethod: String,
 )
 
+internal data class PreferenceLaunchTargets(
+    val preferenceClass: MutableClass,
+    val performClickMethod: MutableMethod,
+    val contextField: String,
+    val intentField: String,
+)
+
 internal object RamblerDynamicResolver {
     private const val CONTEXT_TYPE = "Landroid/content/Context;"
+    private const val INTENT_TYPE = "Landroid/content/Intent;"
+    private const val ANDROIDX_PREFERENCE_TYPE = "Landroidx/preference/Preference;"
     private const val VIEW_TYPE = "Landroid/view/View;"
     private const val CANVAS_TYPE = "Landroid/graphics/Canvas;"
     private const val CHAR_SEQUENCE_TYPE = "Ljava/lang/CharSequence;"
@@ -120,6 +129,59 @@ internal object RamblerDynamicResolver {
     private const val FLOAT_BITS_0_25 = 0x3e800000
     private const val FLOAT_BITS_0_75 = 0x3f400000
     private const val FLOAT_BITS_1_3 = 0x3fa66666
+
+    fun resolvePreferenceLaunchTargets(context: BytecodePatchContext): PreferenceLaunchTargets {
+        val prefClassDef = context.classDefByOrNull(ANDROIDX_PREFERENCE_TYPE)
+            ?: throw PatchException("Could not locate $ANDROIDX_PREFERENCE_TYPE in target APK")
+        val prefClass = context.mutableClassDefBy(prefClassDef.type)
+
+        val performClick = prefClass.methods.firstOrNull { method ->
+            method.parameterTypes.isEmpty() &&
+                method.returnType == "V" &&
+                method.hasInstruction { insn ->
+                    val ref = (insn as? ReferenceInstruction)?.reference as? MethodReference
+                    ref?.definingClass == CONTEXT_TYPE &&
+                        ref.name == "startActivity" &&
+                        ref.parameterTypes.map { it.toString() } == listOf(INTENT_TYPE)
+                }
+        } ?: throw PatchException(
+            "Could not locate performClick()V calling Context.startActivity(Intent) on $ANDROIDX_PREFERENCE_TYPE",
+        )
+
+        val insns = performClick.implementation?.instructions?.toList().orEmpty()
+        val intentField = insns.asReversed().firstNotNullOfOrNull { insn ->
+            val ref = (insn as? ReferenceInstruction)?.reference as? FieldReference
+            if (insn.opcode == Opcode.IGET_OBJECT &&
+                ref?.definingClass == ANDROIDX_PREFERENCE_TYPE &&
+                ref.type == INTENT_TYPE
+            ) {
+                ref.name
+            } else {
+                null
+            }
+        } ?: prefClass.instanceFields.firstOrNull { it.type == INTENT_TYPE }?.name
+            ?: throw PatchException("Could not locate Intent field on $ANDROIDX_PREFERENCE_TYPE")
+
+        val contextField = insns.asReversed().firstNotNullOfOrNull { insn ->
+            val ref = (insn as? ReferenceInstruction)?.reference as? FieldReference
+            if (insn.opcode == Opcode.IGET_OBJECT &&
+                ref?.definingClass == ANDROIDX_PREFERENCE_TYPE &&
+                ref.type == CONTEXT_TYPE
+            ) {
+                ref.name
+            } else {
+                null
+            }
+        } ?: prefClass.instanceFields.firstOrNull { it.type == CONTEXT_TYPE }?.name
+            ?: throw PatchException("Could not locate Context field on $ANDROIDX_PREFERENCE_TYPE")
+
+        return PreferenceLaunchTargets(
+            preferenceClass = prefClass,
+            performClickMethod = performClick,
+            contextField = contextField,
+            intentField = intentField,
+        )
+    }
 
     fun resolveFlagTargets(context: BytecodePatchContext): FlagTargets {
         var flagClassDef: ClassDef? = null
