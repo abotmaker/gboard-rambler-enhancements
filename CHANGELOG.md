@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.8](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.7...v1.1.8) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* **Gboard:** Fix **Per-app custom instructions** being skipped whenever **App context** is turned off and **Default custom instructions** is left empty (Setup A). Gboard's early-exit branch in `AgenticDictationExtension`'s session Bundle builder jumped directly to the `return-object` label, bypassing the hook inserted ahead of it; replacing `return-object` in place and appending the return after the hook ensures all branch paths resolve per-app rules.
+
 ## [1.1.7](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.6...v1.1.7) (2026-11-23)
 
 ### ✨ New Features
