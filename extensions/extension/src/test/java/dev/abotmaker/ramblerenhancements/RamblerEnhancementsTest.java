@@ -301,6 +301,97 @@ public final class RamblerEnhancementsTest {
         assertFalse(RamblerPreferenceLauncher.maybeLaunch(new FakePreference(context, null)));
     }
 
+    @Test
+    public void gboardProtoPreferenceStoreDrivesLiveTogglesAndInstantFlagRefresh() {
+        Context context = RuntimeEnvironment.getApplication();
+        String originalPrefsClass = RamblerDynamicConfig.PREFS_CLASS;
+        String originalGetInstance = RamblerDynamicConfig.PREFS_GET_INSTANCE_METHOD;
+        try {
+            FakeGboardPrefs.reset(context);
+            RamblerDynamicConfig.FEATURE_CURSOR_EDITING = true;
+            RamblerDynamicConfig.FEATURE_APP_CONTEXT = true;
+            RamblerDynamicConfig.FLAG_NAME_FIELD = "flagName";
+            RamblerDynamicConfig.FLAG_RECOMPUTE_METHOD = "recompute";
+            RamblerDynamicConfig.FLAG_NOTIFY_METHOD = "notifyListeners";
+            RamblerDynamicConfig.PREFS_CLASS = FakeGboardPrefs.class.getName();
+            RamblerDynamicConfig.PREFS_GET_INSTANCE_METHOD = "getInstance";
+            RamblerFlagRuntime.clearForTesting();
+
+            // Simulate user flipping native switches in setting_jetson_voice.xml (written to qvt,
+            // NOT to Android's <pkg>_preferences.xml).
+            FakeGboardPrefs.backing.edit()
+                    .putBoolean(RamblerEnhancementsSettings.PREF_KEY_APPEND_ONLY, true)
+                    .putBoolean(RamblerEnhancementsSettings.PREF_KEY_APP_CONTEXT_ENABLED, false)
+                    .commit();
+
+            FakeOkiFlag surroundingLimit = new FakeOkiFlag(
+                    RamblerFlagRuntime.SURROUNDING_TEXT_LIMIT_FLAG, Long.valueOf(2000L));
+            FakeOkiFlag appContext = new FakeOkiFlag(
+                    RamblerFlagRuntime.APP_CONTEXT_FLAG, Boolean.FALSE);
+
+            RamblerFlagRuntime.seedAndRefreshIfNeeded(context);
+            assertTrue(surroundingLimit.recompute());
+            assertEquals(Long.valueOf(0L), surroundingLimit.resolved);
+            assertFalse(appContext.recompute());
+            assertEquals(Boolean.FALSE, appContext.resolved);
+
+            // Live flip inside Gboard's native qvt store triggers immediate flag refresh!
+            FakeGboardPrefs.instance.putBoolean(
+                    RamblerEnhancementsSettings.PREF_KEY_APP_CONTEXT_ENABLED, true);
+            assertEquals(Boolean.TRUE, appContext.resolved);
+            assertEquals(1, appContext.notifyCount);
+
+            // Writing from RamblerEnhancementsActivity updates qvt too!
+            assertTrue(RamblerEnhancementsSettings.writeAppendOnly(context, false));
+            assertFalse(FakeGboardPrefs.backing.getBoolean(
+                    RamblerEnhancementsSettings.PREF_KEY_APPEND_ONLY, true));
+            assertEquals(Long.valueOf(2000L), surroundingLimit.resolved);
+        } finally {
+            RamblerDynamicConfig.PREFS_CLASS = originalPrefsClass;
+            RamblerDynamicConfig.PREFS_GET_INSTANCE_METHOD = originalGetInstance;
+            RamblerFlagRuntime.clearForTesting();
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public interface FakeGboardPrefListener {
+        void onPrefChanged(FakeGboardPrefs prefs, String key);
+    }
+
+    @SuppressWarnings("unused")
+    public static final class FakeGboardPrefs {
+        static FakeGboardPrefs instance;
+        static SharedPreferences backing;
+        final java.util.function.Supplier<SharedPreferences> e = () -> backing;
+        private final java.util.Map<String, java.util.List<FakeGboardPrefListener>> listeners =
+                new java.util.HashMap<String, java.util.List<FakeGboardPrefListener>>();
+
+        static void reset(Context context) {
+            backing = context.getSharedPreferences("fake_gboard_proto_prefs", Context.MODE_PRIVATE);
+            backing.edit().clear().commit();
+            instance = new FakeGboardPrefs();
+        }
+
+        public static FakeGboardPrefs getInstance(Context context) {
+            return instance;
+        }
+
+        public void registerListener(FakeGboardPrefListener listener, String key) {
+            listeners.computeIfAbsent(key, k -> new java.util.ArrayList<FakeGboardPrefListener>())
+                    .add(listener);
+        }
+
+        public void putBoolean(String key, boolean value) {
+            backing.edit().putBoolean(key, value).commit();
+            java.util.List<FakeGboardPrefListener> list = listeners.get(key);
+            if (list != null) {
+                for (FakeGboardPrefListener l : list) {
+                    l.onPrefChanged(this, key);
+                }
+            }
+        }
+    }
+
     @SuppressWarnings("unused")
     private static final class FakePreference {
         final Context j;

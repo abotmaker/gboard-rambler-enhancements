@@ -139,7 +139,11 @@ internal val ramblerSharedExtensionPatch = bytecodePatch(
             }
         }
 
-        if (RamblerFeature.CUSTOM_INSTRUCTIONS in state.selectedFeatures) {
+        val needsPrefs = RamblerFeature.CUSTOM_INSTRUCTIONS in state.selectedFeatures ||
+            RamblerFeature.PERSONAL_DICTIONARY in state.selectedFeatures ||
+            RamblerFeature.CURSOR_EDITING in state.selectedFeatures ||
+            RamblerFeature.APP_CONTEXT in state.selectedFeatures
+        if (needsPrefs) {
             val agentic = state.agenticTargets ?: RamblerDynamicResolver.resolveAgenticExtension(this)
                 .also { state.agenticTargets = it }
             if (state.prefsTargets == null) {

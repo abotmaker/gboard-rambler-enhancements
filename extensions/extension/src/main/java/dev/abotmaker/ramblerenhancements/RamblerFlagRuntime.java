@@ -49,6 +49,7 @@ public final class RamblerFlagRuntime {
     private static final WeakHashMap<Object, String> LIVE_TOGGLE_FLAGS =
             new WeakHashMap<Object, String>();
     private static final AtomicBoolean CONTEXT_HYDRATED = new AtomicBoolean(false);
+    private static final AtomicBoolean GBOARD_LISTENER_ATTACHED = new AtomicBoolean(false);
     private static final AtomicBoolean PREF_LISTENER_ATTACHED = new AtomicBoolean(false);
 
     private static volatile Context applicationContext;
@@ -80,22 +81,38 @@ public final class RamblerFlagRuntime {
     }
 
     /**
-     * Seeds the application context and performs a one-time flag refresh on first startup once
-     * a real Context becomes available (so saved toggles like Append-only take effect even if
-     * flags were first computed during early static initialization).
+     * Seeds the application context and performs a flag refresh once a real Context or Gboard's
+     * live Preferences store becomes available (so saved toggles like Append-only and App context
+     * take effect immediately even if flags were first computed during early static init).
      */
     public static void seedAndRefreshIfNeeded(Context context) {
         if (context == null) {
             return;
         }
+        boolean hadGboardListener = GBOARD_LISTENER_ATTACHED.get();
         seedApplicationContext(context);
-        if (CONTEXT_HYDRATED.compareAndSet(false, true)) {
+        boolean newlyHydrated = CONTEXT_HYDRATED.compareAndSet(false, true);
+        boolean newlyAttachedGboard = !hadGboardListener && GBOARD_LISTENER_ATTACHED.get();
+        if (newlyHydrated || newlyAttachedGboard) {
             refreshLiveFlags();
         }
     }
 
     private static void attachDefaultPrefsListenerIfNeeded(Context context) {
-        if (context == null || PREF_LISTENER_ATTACHED.get()) {
+        if (context == null) {
+            return;
+        }
+        if (!GBOARD_LISTENER_ATTACHED.get()) {
+            try {
+                if (RamblerEnhancementsSettings.registerGboardToggleListener(
+                        context, RamblerFlagRuntime::refreshLiveFlags)) {
+                    GBOARD_LISTENER_ATTACHED.set(true);
+                }
+            } catch (Throwable ignored) {
+                // Retry once Gboard's Preferences singleton is ready.
+            }
+        }
+        if (PREF_LISTENER_ATTACHED.get()) {
             return;
         }
         try {
@@ -115,7 +132,7 @@ public final class RamblerFlagRuntime {
             livePrefListener = listener;
             defaultPrefs.registerOnSharedPreferenceChangeListener(listener);
         } catch (Throwable ignored) {
-            // Best-effort live listener for native SwitchPreferenceCompat toggles.
+            // Best-effort live listener for fallback default SharedPreferences.
         }
     }
 
@@ -144,7 +161,9 @@ public final class RamblerFlagRuntime {
         cachedHandles = null;
         livePrefListener = null;
         CONTEXT_HYDRATED.set(false);
+        GBOARD_LISTENER_ATTACHED.set(false);
         PREF_LISTENER_ATTACHED.set(false);
+        RamblerEnhancementsSettings.clearGboardBridgeForTesting();
         synchronized (FLAG_CACHE_LOCK) {
             LIVE_TOGGLE_FLAGS.clear();
         }

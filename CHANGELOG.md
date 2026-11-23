@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.5](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.4...v1.1.5) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* **Gboard:** Read, write, and listen directly to Gboard's live `Preferences` (`qvt` Proto Preference v1) store for **Append-only dictation**, **App context**, **Cursor-aware editing**, and **Use dictionary words**. Previously, native `SwitchPreferenceCompat` rows in **Gboard Settings → Voice typing → Rambler voice typing** wrote into Gboard's Proto Preference store while runtime flag checks read Android's `<package>_preferences.xml` — causing **Append-only dictation** to stay at 2,000 surrounding chars (rewriting earlier sentences) and **App context** to keep sending `Input Type: CapSentences` (fighting lowercase Custom instructions) even after flipping those switches!
+
 ## [1.1.4](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.3...v1.1.4) (2026-11-23)
 
 ### ✨ Improvements
