@@ -3,6 +3,7 @@ package dev.abotmaker.ramblerenhancements.patches
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.removeInstructions
+import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.AppTarget
 import app.morphe.patcher.patch.BytecodePatchContext
 import app.morphe.patcher.patch.Compatibility
@@ -173,12 +174,19 @@ internal val ramblerSharedExtensionPatch = bytecodePatch(
     }
 }
 
-private fun installPerAppCustomInstructionHook(targets: SessionBundleTargets) {
-    // Insert return hooks in reverse order first so index 0 stays stable for entry capture.
+internal fun installPerAppCustomInstructionHook(targets: SessionBundleTargets) {
+    // Replace each `return-object vX` IN PLACE so any branch targeting that return's label
+    // (for example `if-eqz v4, :return_bundle` when App context is off and Default prompt is empty)
+    // lands on `applyPerAppCustomInstruction(vX)` before returning, then append `return-object vX`
+    // immediately after it. Iterating in reverse keeps earlier indices and index 0 stable.
     for ((retIndex, bundleReg) in targets.returnIndicesAndRegisters.asReversed()) {
-        targets.bundleMethod.addInstructions(
+        targets.bundleMethod.replaceInstruction(
             retIndex,
             "invoke-static {v$bundleReg}, $CUSTOM_INSTR_RULES_TYPE->applyPerAppCustomInstruction(Landroid/os/Bundle;)V",
+        )
+        targets.bundleMethod.addInstructions(
+            retIndex + 1,
+            "return-object v$bundleReg",
         )
     }
     targets.bundleMethod.addInstructions(
@@ -229,9 +237,13 @@ internal fun installAgenticCtorStartupHook(targets: AgenticExtensionTargets) {
     }
     val pIdx = targets.contextParamIndex
     for (returnIdx in returnIndices.asReversed()) {
-        targets.contextConstructor.addInstructions(
+        targets.contextConstructor.replaceInstruction(
             returnIdx,
             "invoke-static {p$pIdx}, $CONTACTS_RUNTIME_TYPE->onRamblerStart(Landroid/content/Context;)V",
+        )
+        targets.contextConstructor.addInstructions(
+            returnIdx + 1,
+            "return-void",
         )
     }
 }

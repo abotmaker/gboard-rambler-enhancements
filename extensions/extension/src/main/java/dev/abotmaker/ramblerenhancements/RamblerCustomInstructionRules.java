@@ -217,6 +217,11 @@ public final class RamblerCustomInstructionRules {
         String resolved = resolveEffectiveInstruction(
                 packageName, defaultInstruction, rules, disabled);
         rewriteBundleCustomInstruction(bundle, resolved);
+        logInfoSafely("Per-app custom instruction: pkg="
+                + (packageName == null ? "<null>" : packageName)
+                + " -> " + (resolved == null || resolved.isEmpty()
+                        ? "none"
+                        : resolved.length() + " chars"));
     }
 
     public static void rewriteBundleCustomInstruction(Bundle bundle, String resolvedInstruction) {
@@ -548,6 +553,14 @@ public final class RamblerCustomInstructionRules {
             cursor = cursor.getSuperclass();
         }
         return null;
+    }
+
+    private static void logInfoSafely(String message) {
+        try {
+            Log.i(TAG, message);
+        } catch (Throwable ignored) {
+            // Never propagate logging errors into Gboard.
+        }
     }
 
     private static void logWarningSafely(String message, Throwable throwable) {

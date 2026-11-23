@@ -309,6 +309,95 @@ class RamblerEnhancementsPatchTest {
         assertEquals(3, chosen)
     }
 
+    @Test
+    fun perAppCustomInstructionHookPreservesBranchesTargetingReturnObject() {
+        val stockImpl = com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation(
+            11,
+            listOf(
+                // addr 0 (size 1): const/4 v1, 0
+                com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction11n(
+                    com.android.tools.smali.dexlib2.Opcode.CONST_4,
+                    1,
+                    0,
+                ),
+                // addr 1 (size 1): const/4 v4, 0
+                com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction11n(
+                    com.android.tools.smali.dexlib2.Opcode.CONST_4,
+                    4,
+                    0,
+                ),
+                // addr 2 (size 2): if-eqz v4, +3 -> jumps directly to addr 5 (return-object v1)
+                com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction21t(
+                    com.android.tools.smali.dexlib2.Opcode.IF_EQZ,
+                    4,
+                    3,
+                ),
+                // addr 4 (size 1): const/4 v0, 1 (simulates user_preferences write block)
+                com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction11n(
+                    com.android.tools.smali.dexlib2.Opcode.CONST_4,
+                    0,
+                    1,
+                ),
+                // addr 5 (size 1): return-object v1
+                com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction11x(
+                    com.android.tools.smali.dexlib2.Opcode.RETURN_OBJECT,
+                    1,
+                ),
+            ),
+            emptyList(),
+            emptyList(),
+        )
+        val method = app.morphe.patcher.util.proxy.mutableTypes.MutableMethod(
+            com.android.tools.smali.dexlib2.immutable.ImmutableMethod(
+                "Lfhv;",
+                "t",
+                listOf(
+                    com.android.tools.smali.dexlib2.immutable.ImmutableMethodParameter(
+                        "Lkth;",
+                        emptySet(),
+                        null,
+                    ),
+                ),
+                "Landroid/os/Bundle;",
+                com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value,
+                emptySet(),
+                emptySet(),
+                stockImpl,
+            ),
+        )
+        val retIdx = method.implementation!!.instructions.indexOfLast {
+            it.opcode == com.android.tools.smali.dexlib2.Opcode.RETURN_OBJECT
+        }
+        installPerAppCustomInstructionHook(
+            SessionBundleTargets(
+                bundleMethod = method,
+                contextField = "b",
+                editorInfoField = "h",
+                returnIndicesAndRegisters = listOf(retIdx to 1),
+            ),
+        )
+
+        val insns = method.implementation!!.instructions
+        assertEquals(com.android.tools.smali.dexlib2.Opcode.INVOKE_STATIC, insns[0].opcode)
+        val applyIdx = insns.indexOfFirst { insn ->
+            val ref = (insn as? com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction)
+                ?.reference as? com.android.tools.smali.dexlib2.iface.reference.MethodReference
+            ref?.name == "applyPerAppCustomInstruction"
+        }
+        val finalRetIdx = insns.indexOfLast {
+            it.opcode == com.android.tools.smali.dexlib2.Opcode.RETURN_OBJECT
+        }
+        assertTrue("Expected applyPerAppCustomInstruction before return-object", applyIdx in 1 until finalRetIdx)
+        val branch = insns.first {
+            it.opcode == com.android.tools.smali.dexlib2.Opcode.IF_EQZ
+        } as com.android.tools.smali.dexlib2.builder.BuilderOffsetInstruction
+        assertEquals(
+            "Branch targeting return-object must land on applyPerAppCustomInstruction, not skip over it",
+            insns[applyIdx].location.codeAddress,
+            branch.target.location.codeAddress,
+        )
+    }
+
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
     }.newDocumentBuilder().parse(InputSource(StringReader(xml)))
