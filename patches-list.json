@@ -1,5 +1,5 @@
 {
-  "version": "1.1.8",
+  "version": "1.2.0",
   "patches": [
     {
       "name": "Rambler App Context",
@@ -58,6 +58,19 @@
     {
       "name": "Rambler Personal Dictionary",
       "description": "Enables Gboard Rambler\u0027s UserFeatureCache MUSE_STATS personal voice dictionary (credited to nl-morphe-patches) with a live Use dictionary words toggle plus add, import/export (.txt), remove, and clear controls. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.google.android.inputmethod.latin": [
+          "18.5.4.993608717-release-arm64-v8a",
+          "18.8.0.1022711984-beta-arm64-v8a"
+        ]
+      },
+      "options": []
+    },
+    {
+      "name": "Rambler Productivity Tools",
+      "description": "Adds opt-in hands-free Voice Send \u0026 Search suffixes, deterministic Voice Snippets, post-dictation Find \u0026 Replace (plain or regex, global or per-app), Strip Trailing Period, Local Dictation History (last 50 entries), Auto Parallel Retry on flaky networks, configurable Longer Dictation Sessions, and one-tap JSON Settings Backup \u0026 Restore. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
       "use": true,
       "dependencies": [],
       "compatiblePackages": {

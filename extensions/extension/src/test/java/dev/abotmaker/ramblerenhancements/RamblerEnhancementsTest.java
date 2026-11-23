@@ -38,15 +38,19 @@ public final class RamblerEnhancementsTest {
         RamblerFlagRuntime.clearForTesting();
         RamblerPreferenceLauncher.clearForTesting();
         RamblerCustomInstructionRules.clearForTesting();
+        RamblerTextPipeline.clearForTesting();
         RamblerMuseStatsBridge.setBackendForTesting(null);
         RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "b";
         RamblerDynamicConfig.AGENTIC_EDITOR_INFO_FIELD = "h";
+        RamblerDynamicConfig.PCN_GET_EDITOR_INFO_METHOD = "k";
+        RamblerDynamicConfig.PCN_PERFORM_ACTION_METHOD = "y";
         RamblerDynamicConfig.FEATURE_WAVEFORM = false;
         RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS = false;
         RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY = false;
         RamblerDynamicConfig.FEATURE_CONTACT_NAMES = false;
         RamblerDynamicConfig.FEATURE_CURSOR_EDITING = false;
         RamblerDynamicConfig.FEATURE_APP_CONTEXT = false;
+        RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS = false;
         RamblerDynamicConfig.FLAG_NAME_FIELD = "a";
         RamblerDynamicConfig.FLAG_RECOMPUTE_METHOD = "x";
         RamblerDynamicConfig.FLAG_NOTIFY_METHOD = "t";
@@ -450,6 +454,320 @@ public final class RamblerEnhancementsTest {
         String hookedInstr = hookedBundle.getStringArrayList("user_preferences").get(0);
         assertTrue(hookedInstr.contains("Polished professional tone"));
         assertFalse(hookedInstr.contains("Default casual"));
+    }
+
+    @Test
+    public void handsFreeVoiceSendSearchSnippetsFindReplaceStripPeriodAndHistoryWork() {
+        Context context = RuntimeEnvironment.getApplication();
+        SharedPreferences prefs = RamblerEnhancementsSettings.preferencesOrNull(context);
+        prefs.edit().clear().commit();
+        RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS = true;
+        RamblerFlagRuntime.seedApplicationContext(context);
+
+        // Configure snippets, find/replace, strip trailing period, and voice send/search.
+        RamblerEnhancementsSettings.writeVoiceSendEnabled(context, true);
+        RamblerEnhancementsSettings.writeVoiceSendTriggers(context, "hit send, send it");
+        RamblerEnhancementsSettings.writeVoiceSearchEnabled(context, true);
+        RamblerEnhancementsSettings.writeVoiceSearchTriggers(context, "hit search");
+        RamblerEnhancementsSettings.writeStripTrailingPeriod(context, true);
+        RamblerEnhancementsSettings.writeHistoryEnabled(context, true);
+
+        RamblerTextPipeline.upsertSnippet(
+                context,
+                new RamblerTextPipeline.SnippetRule(
+                        "s1", "my email", "alex.dev+work@example.com", true));
+        RamblerTextPipeline.upsertSnippet(
+                context,
+                new RamblerTextPipeline.SnippetRule(
+                        "s2", "dollar tag", "$100\\cash", true));
+        RamblerTextPipeline.upsertReplaceRule(
+                context,
+                new RamblerTextPipeline.ReplaceRule(
+                        "rep1", "g board", "Gboard", false, false, null, true));
+        RamblerTextPipeline.upsertReplaceRule(
+                context,
+                new RamblerTextPipeline.ReplaceRule(
+                        "rep2", "\\bPR (\\d+)\\b", "PR#$1", true, false,
+                        Collections.singletonList("com.Slack"), true));
+
+        // 1. WhatsApp chat WITH IME_ACTION_SEND: strips ", hit send.", expands snippet, fires SEND.
+        android.view.inputmethod.EditorInfo whatsappSend = new android.view.inputmethod.EditorInfo();
+        whatsappSend.packageName = "com.whatsapp";
+        whatsappSend.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND;
+
+        final int[] dispatchedAction = {0};
+        FakePcn fakePcn = new FakePcn(whatsappSend);
+        RamblerTextPipeline.setActionDispatcherForTesting((p, action) -> {
+            dispatchedAction[0] = action;
+            RamblerTextPipeline.invokePerformEditorAction(p, action);
+        });
+
+        String out1 = RamblerTextPipeline.processCommitText(
+                fakePcn, "Pls send g board details to my email, hit send.");
+        assertEquals("Pls send Gboard details to alex.dev+work@example.com", out1);
+        assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEND, dispatchedAction[0]);
+        assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEND, fakePcn.lastPerformedAction);
+
+        // 2. Same WhatsApp chat, normal message mentioning "send" WITHOUT trigger -> does NOT send!
+        dispatchedAction[0] = 0;
+        fakePcn.lastPerformedAction = 0;
+        String out2 = RamblerTextPipeline.processCommitText(fakePcn, "Pls send me the money.");
+        assertEquals("Pls send me the money", out2); // trailing period stripped!
+        assertEquals(0, dispatchedAction[0]);
+
+        // 3. Notes app (NO Send IME action) -> saying "hit send" does NOT strip or trigger!
+        android.view.inputmethod.EditorInfo notesEditor = new android.view.inputmethod.EditorInfo();
+        notesEditor.packageName = "com.oneplus.note";
+        notesEditor.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_NONE;
+        FakePcn notesPcn = new FakePcn(notesEditor);
+        String out3 = RamblerTextPipeline.processCommitText(notesPcn, "Remember to hit send...");
+        assertEquals("Remember to hit send...", out3); // ellipsis preserved!
+        assertEquals(0, notesPcn.lastPerformedAction);
+
+        // 4. Multi-line field with IME_FLAG_NO_ENTER_ACTION -> NEVER triggers Send!
+        android.view.inputmethod.EditorInfo noEnterSend = new android.view.inputmethod.EditorInfo();
+        noEnterSend.packageName = "com.twitter.android";
+        noEnterSend.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+                | android.view.inputmethod.EditorInfo.IME_FLAG_NO_ENTER_ACTION;
+        FakePcn xPcn = new FakePcn(noEnterSend);
+        String out4 = RamblerTextPipeline.processCommitText(xPcn, "Draft tweet, hit send.");
+        assertEquals("Draft tweet, hit send", out4);
+        assertEquals(0, xPcn.lastPerformedAction);
+
+        // 5. Search bar with IME_ACTION_SEARCH -> strips trigger and fires SEARCH!
+        android.view.inputmethod.EditorInfo searchEditor = new android.view.inputmethod.EditorInfo();
+        searchEditor.packageName = "com.android.chrome";
+        searchEditor.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH;
+        FakePcn chromePcn = new FakePcn(searchEditor);
+        String out5 = RamblerTextPipeline.processCommitText(chromePcn, "weather in tokyo, hit search.");
+        assertEquals("weather in tokyo", out5);
+        assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, chromePcn.lastPerformedAction);
+
+        // 6. Per-app regex replace + literal $/\ snippet safety + abbreviation preservation.
+        android.view.inputmethod.EditorInfo slackEditor = new android.view.inputmethod.EditorInfo();
+        slackEditor.packageName = "com.Slack";
+        FakePcn slackPcn = new FakePcn(slackEditor);
+        String out6 = RamblerTextPipeline.processCommitText(
+                slackPcn, "Merged PR 42 with dollar tag e.g.");
+        assertEquals("Merged PR#42 with $100\\cash e.g.", out6);
+
+        // 7. Standalone "Hit send." -> empty text commit + fires SEND!
+        fakePcn.lastPerformedAction = 0;
+        String out7 = RamblerTextPipeline.processCommitText(fakePcn, "Hit send.");
+        assertEquals("", out7);
+        assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEND, fakePcn.lastPerformedAction);
+
+        // 8. Local dictation history recorded non-empty commits (newest first) & supports delete/clear.
+        List<RamblerTextPipeline.HistoryEntry> hist = RamblerTextPipeline.readHistory(context);
+        assertEquals(6, hist.size()); // out7 was empty so not stored
+        assertEquals("Merged PR#42 with $100\\cash e.g.", hist.get(0).text);
+        assertEquals("com.Slack", hist.get(0).packageName);
+        assertTrue(RamblerTextPipeline.deleteHistoryEntry(context, hist.get(0).id));
+        assertEquals(5, RamblerTextPipeline.readHistory(context).size());
+        assertTrue(RamblerTextPipeline.clearHistory(context));
+        assertTrue(RamblerTextPipeline.readHistory(context).isEmpty());
+    }
+
+    @Test
+    public void perAppBehaviorOverridesRetryAndSessionDurationRefreshLiveFlags() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerEnhancementsSettings.defaultPreferencesOrNull(context).edit().clear().commit();
+        RamblerDynamicConfig.FEATURE_CURSOR_EDITING = true;
+        RamblerDynamicConfig.FEATURE_APP_CONTEXT = true;
+        RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS = true;
+        RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS = true;
+        RamblerDynamicConfig.FLAG_NAME_FIELD = "flagName";
+        RamblerDynamicConfig.FLAG_RECOMPUTE_METHOD = "recompute";
+        RamblerDynamicConfig.FLAG_NOTIFY_METHOD = "notifyListeners";
+        RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "ctx";
+
+        // Global defaults: Append-only OFF, App context ON, Strip trailing period OFF.
+        RamblerEnhancementsSettings.writeAppendOnly(context, false);
+        RamblerEnhancementsSettings.writeAppContextEnabled(context, true);
+        RamblerEnhancementsSettings.writeStripTrailingPeriod(context, false);
+
+        // Behavior-only app rule for X: force Append-only ON, App context OFF, Strip period ON.
+        RamblerCustomInstructionRules.upsertRule(
+                context,
+                new RamblerCustomInstructionRules.Rule(
+                        "x_beh",
+                        "X behavior",
+                        "",
+                        Collections.singletonList("com.twitter.android"),
+                        false,
+                        RamblerCustomInstructionRules.OVERRIDE_ON,
+                        RamblerCustomInstructionRules.OVERRIDE_OFF,
+                        RamblerCustomInstructionRules.OVERRIDE_ON));
+
+        FakeOkiFlag surroundingLimit = new FakeOkiFlag(
+                RamblerFlagRuntime.SURROUNDING_TEXT_LIMIT_FLAG, Long.valueOf(2000L));
+        FakeOkiFlag appContext = new FakeOkiFlag(
+                RamblerFlagRuntime.APP_CONTEXT_FLAG, Boolean.FALSE);
+        FakeOkiFlag autoRetry = new FakeOkiFlag(
+                RamblerFlagRuntime.AUTO_PARALLEL_RETRY_FLAG, Boolean.FALSE);
+        FakeOkiFlag pcmCache = new FakeOkiFlag(
+                RamblerFlagRuntime.PCM_AUDIO_CACHING_FLAG, Boolean.FALSE);
+        FakeOkiFlag maxSession = new FakeOkiFlag(
+                RamblerFlagRuntime.MAX_SESSION_DURATION_FLAG, Long.valueOf(300L));
+
+        RamblerFlagRuntime.seedAndRefreshIfNeeded(context);
+        surroundingLimit.recompute();
+        appContext.recompute();
+        autoRetry.recompute();
+        pcmCache.recompute();
+        maxSession.recompute();
+
+        assertEquals(Long.valueOf(2000L), surroundingLimit.resolved);
+        assertEquals(Boolean.TRUE, appContext.resolved);
+        assertEquals(Boolean.FALSE, autoRetry.resolved);
+        assertEquals(Long.valueOf(300L), maxSession.resolved);
+
+        // Activate in X -> live flags flip immediately before session starts!
+        android.view.inputmethod.EditorInfo xEd = new android.view.inputmethod.EditorInfo();
+        xEd.packageName = "com.twitter.android";
+        RamblerTextPipeline.onExtensionActivate(new FakeAgenticExtension(context, xEd), xEd);
+        assertEquals(Long.valueOf(0L), surroundingLimit.resolved);
+        assertEquals(Boolean.FALSE, appContext.resolved);
+        assertTrue(RamblerTextPipeline.shouldStripTrailingPeriod(context, "com.twitter.android"));
+
+        // Switch to Notes -> flags immediately revert to global defaults!
+        android.view.inputmethod.EditorInfo notesEd = new android.view.inputmethod.EditorInfo();
+        notesEd.packageName = "com.oneplus.note";
+        RamblerTextPipeline.onExtensionActivate(new FakeAgenticExtension(context, notesEd), notesEd);
+        assertEquals(Long.valueOf(2000L), surroundingLimit.resolved);
+        assertEquals(Boolean.TRUE, appContext.resolved);
+        assertFalse(RamblerTextPipeline.shouldStripTrailingPeriod(context, "com.oneplus.note"));
+
+        // Toggle Auto parallel retry + Longer dictation session (10 min = 600s) -> live refresh!
+        assertTrue(RamblerEnhancementsSettings.writeAutoParallelRetryEnabled(context, true));
+        assertEquals(Boolean.TRUE, autoRetry.resolved);
+        assertEquals(Boolean.TRUE, pcmCache.resolved);
+
+        assertTrue(RamblerEnhancementsSettings.writeMaxSessionSeconds(context, 600));
+        assertEquals(Long.valueOf(600L), maxSession.resolved);
+        assertTrue(RamblerEnhancementsSettings.writeMaxSessionSeconds(context, 0));
+        assertEquals(Long.valueOf(300L), maxSession.resolved);
+    }
+
+    @Test
+    public void backupManagerRoundTripsAllSettingsCleanly() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerWaveformSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerEnhancementsSettings.defaultPreferencesOrNull(context).edit().clear().commit();
+
+        final java.util.List<String> fakeDictWords = new java.util.ArrayList<String>(
+                Arrays.asList("Morphe", "GboardWu"));
+        final String[] fakeCustomInstr = {"Default prompt"};
+        RamblerMuseStatsBridge.setBackendForTesting(new RamblerMuseStatsBridge.Backend() {
+            @Override
+            public List<String> readWords(Context c) {
+                return new java.util.ArrayList<String>(fakeDictWords);
+            }
+
+            @Override
+            public boolean addWords(Context c, java.util.Collection<String> words) {
+                for (String w : words) {
+                    if (!fakeDictWords.contains(w)) {
+                        fakeDictWords.add(w);
+                    }
+                }
+                return true;
+            }
+
+            @Override
+            public boolean removeWord(Context c, String word) {
+                return fakeDictWords.remove(word);
+            }
+
+            @Override
+            public boolean clearAllWords(Context c) {
+                fakeDictWords.clear();
+                return true;
+            }
+
+            @Override
+            public String readCustomInstruction(Context c) {
+                return fakeCustomInstr[0];
+            }
+
+            @Override
+            public boolean writeCustomInstruction(Context c, String value) {
+                fakeCustomInstr[0] = value;
+                return true;
+            }
+        });
+
+        RamblerWaveformSettings.writeListeningStyle(
+                context, RamblerWaveformSettings.LISTENING_HEX_ANDROID_WAVE);
+        RamblerWaveformSettings.writeListeningCustomColor(context, "#22D3EE");
+        RamblerEnhancementsSettings.writeAppendOnly(context, true);
+        RamblerEnhancementsSettings.writeAutoParallelRetryEnabled(context, true);
+        RamblerEnhancementsSettings.writeMaxSessionSeconds(context, 900);
+        RamblerEnhancementsSettings.writeVoiceSendEnabled(context, true);
+        RamblerEnhancementsSettings.writeVoiceSendTriggers(context, "fire away");
+        RamblerCustomInstructionRules.upsertRule(
+                context,
+                new RamblerCustomInstructionRules.Rule(
+                        "r1", "Chat", "Casual", Collections.singletonList("com.whatsapp"),
+                        false, RamblerCustomInstructionRules.OVERRIDE_ON,
+                        RamblerCustomInstructionRules.OVERRIDE_INHERIT,
+                        RamblerCustomInstructionRules.OVERRIDE_ON));
+        RamblerTextPipeline.upsertSnippet(
+                context, new RamblerTextPipeline.SnippetRule("sn1", "sig", "Best, Alex", true));
+        RamblerTextPipeline.upsertReplaceRule(
+                context, new RamblerTextPipeline.ReplaceRule(
+                        "rp1", "teh", "the", false, false, null, true));
+        RamblerTextPipeline.recordHistory(context, "com.whatsapp", "Private secret", 1234L);
+
+        String exported = RamblerBackupManager.exportJson(context);
+        assertFalse("Private dictation history must not be included in backups",
+                exported.contains("Private secret"));
+
+        // Wipe everything and re-import!
+        RamblerWaveformSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerEnhancementsSettings.defaultPreferencesOrNull(context).edit().clear().commit();
+        fakeDictWords.clear();
+        fakeCustomInstr[0] = "";
+
+        RamblerBackupManager.ImportResult res = RamblerBackupManager.importJson(context, exported);
+        assertTrue(res.message, res.success);
+        assertEquals(RamblerWaveformSettings.LISTENING_HEX_ANDROID_WAVE,
+                RamblerWaveformSettings.snapshot(context).getListeningStyle());
+        assertEquals("#22D3EE",
+                RamblerWaveformSettings.snapshot(context).getListeningColorValue());
+        assertTrue(RamblerEnhancementsSettings.readAppendOnly(context));
+        assertTrue(RamblerEnhancementsSettings.readAutoParallelRetryEnabled(context));
+        assertEquals(900, RamblerEnhancementsSettings.readMaxSessionSeconds(context));
+        assertTrue(RamblerEnhancementsSettings.readVoiceSendEnabled(context));
+        assertEquals("fire away", RamblerEnhancementsSettings.readVoiceSendTriggers(context));
+        assertEquals("Default prompt", fakeCustomInstr[0]);
+        assertEquals(1, RamblerCustomInstructionRules.readRules(context).size());
+        assertEquals(RamblerCustomInstructionRules.OVERRIDE_ON,
+                RamblerCustomInstructionRules.readRules(context).get(0).stripTrailingPeriodOverride);
+        assertEquals(1, RamblerTextPipeline.readSnippets(context).size());
+        assertEquals(1, RamblerTextPipeline.readReplaceRules(context).size());
+        assertEquals(Arrays.asList("Morphe", "GboardWu"), fakeDictWords);
+    }
+
+    @SuppressWarnings("unused")
+    public static final class FakePcn {
+        final android.view.inputmethod.EditorInfo editorInfo;
+        int lastPerformedAction;
+
+        FakePcn(android.view.inputmethod.EditorInfo editorInfo) {
+            this.editorInfo = editorInfo;
+        }
+
+        public android.view.inputmethod.EditorInfo k() {
+            return editorInfo;
+        }
+
+        public void y(int action) {
+            lastPerformedAction = action;
+        }
     }
 
     @SuppressWarnings("unused")

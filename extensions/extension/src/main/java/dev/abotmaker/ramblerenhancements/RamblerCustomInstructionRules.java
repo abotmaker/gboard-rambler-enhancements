@@ -77,12 +77,41 @@ public final class RamblerCustomInstructionRules {
     private RamblerCustomInstructionRules() {
     }
 
+    public static final int OVERRIDE_INHERIT = 0;
+    public static final int OVERRIDE_ON = 1;
+    public static final int OVERRIDE_OFF = 2;
+
+    public static final class BehaviorOverrides {
+        public final int appendOnly;
+        public final int appContext;
+        public final int stripTrailingPeriod;
+
+        public BehaviorOverrides(int appendOnly, int appContext, int stripTrailingPeriod) {
+            this.appendOnly = normalizeOverride(appendOnly);
+            this.appContext = normalizeOverride(appContext);
+            this.stripTrailingPeriod = normalizeOverride(stripTrailingPeriod);
+        }
+
+        public static BehaviorOverrides inheritAll() {
+            return new BehaviorOverrides(OVERRIDE_INHERIT, OVERRIDE_INHERIT, OVERRIDE_INHERIT);
+        }
+
+        public boolean hasAnyOverride() {
+            return appendOnly != OVERRIDE_INHERIT
+                    || appContext != OVERRIDE_INHERIT
+                    || stripTrailingPeriod != OVERRIDE_INHERIT;
+        }
+    }
+
     public static final class Rule {
         public final String id;
         public final String name;
         public final String instruction;
         public final List<String> packages;
         public final boolean combineWithDefault;
+        public final int appendOnlyOverride;
+        public final int appContextOverride;
+        public final int stripTrailingPeriodOverride;
 
         public Rule(
                 String id,
@@ -90,6 +119,26 @@ public final class RamblerCustomInstructionRules {
                 String instruction,
                 Collection<String> packages,
                 boolean combineWithDefault) {
+            this(
+                    id,
+                    name,
+                    instruction,
+                    packages,
+                    combineWithDefault,
+                    OVERRIDE_INHERIT,
+                    OVERRIDE_INHERIT,
+                    OVERRIDE_INHERIT);
+        }
+
+        public Rule(
+                String id,
+                String name,
+                String instruction,
+                Collection<String> packages,
+                boolean combineWithDefault,
+                int appendOnlyOverride,
+                int appContextOverride,
+                int stripTrailingPeriodOverride) {
             this.id = (id == null || id.trim().isEmpty())
                     ? "rule_" + System.currentTimeMillis()
                     : id.trim();
@@ -108,11 +157,55 @@ public final class RamblerCustomInstructionRules {
             }
             this.packages = Collections.unmodifiableList(new ArrayList<String>(cleaned));
             this.combineWithDefault = combineWithDefault;
+            this.appendOnlyOverride = normalizeOverride(appendOnlyOverride);
+            this.appContextOverride = normalizeOverride(appContextOverride);
+            this.stripTrailingPeriodOverride = normalizeOverride(stripTrailingPeriodOverride);
         }
 
         public String displayName() {
             return name.isEmpty() ? "App rule" : name;
         }
+
+        public boolean hasBehaviorOverrides() {
+            return appendOnlyOverride != OVERRIDE_INHERIT
+                    || appContextOverride != OVERRIDE_INHERIT
+                    || stripTrailingPeriodOverride != OVERRIDE_INHERIT;
+        }
+
+        public String formatBehaviorOverrideBadges() {
+            StringBuilder sb = new StringBuilder();
+            appendOverrideBadge(sb, "Append-only", appendOnlyOverride);
+            appendOverrideBadge(sb, "App context", appContextOverride);
+            appendOverrideBadge(sb, "No trailing period", stripTrailingPeriodOverride);
+            return sb.toString();
+        }
+    }
+
+    private static void appendOverrideBadge(StringBuilder sb, String label, int override) {
+        if (override == OVERRIDE_INHERIT) {
+            return;
+        }
+        if (sb.length() > 0) {
+            sb.append(" · ");
+        }
+        sb.append(label).append(": ").append(override == OVERRIDE_ON ? "ON" : "OFF");
+    }
+
+    public static int normalizeOverride(int value) {
+        if (value == OVERRIDE_ON || value == OVERRIDE_OFF) {
+            return value;
+        }
+        return OVERRIDE_INHERIT;
+    }
+
+    public static String formatOverrideLabel(int value) {
+        if (value == OVERRIDE_ON) {
+            return "Force ON";
+        }
+        if (value == OVERRIDE_OFF) {
+            return "Force OFF";
+        }
+        return "Default";
     }
 
     public static final class AppEntry {
@@ -176,6 +269,9 @@ public final class RamblerCustomInstructionRules {
                 }
             }
             PENDING_SESSION.set(new SessionSnapshot(ctx, packageName));
+            if (ctx != null) {
+                RamblerFlagRuntime.onActivePackageChanged(ctx, packageName);
+            }
         } catch (Throwable throwable) {
             PENDING_SESSION.remove();
             logWarningSafely("Failed to capture Rambler session context", throwable);
@@ -372,6 +468,40 @@ public final class RamblerCustomInstructionRules {
         return prefs.edit().putStringSet(PREF_KEY_DISABLED_APPS, cleaned).commit();
     }
 
+    public static BehaviorOverrides resolveBehaviorOverrides(Context context, String packageName) {
+        if (context == null || packageName == null || packageName.trim().isEmpty()) {
+            return BehaviorOverrides.inheritAll();
+        }
+        return resolveBehaviorOverridesFromRules(packageName, readRules(context));
+    }
+
+    public static BehaviorOverrides resolveBehaviorOverridesFromRules(
+            String packageName, List<Rule> rules) {
+        String pkg = packageName == null ? "" : packageName.trim();
+        if (pkg.isEmpty() || rules == null || rules.isEmpty()) {
+            return BehaviorOverrides.inheritAll();
+        }
+        int appendOnly = OVERRIDE_INHERIT;
+        int appContext = OVERRIDE_INHERIT;
+        int stripPeriod = OVERRIDE_INHERIT;
+        for (Rule rule : rules) {
+            if (rule == null || !rule.packages.contains(pkg)) {
+                continue;
+            }
+            if (appendOnly == OVERRIDE_INHERIT && rule.appendOnlyOverride != OVERRIDE_INHERIT) {
+                appendOnly = rule.appendOnlyOverride;
+            }
+            if (appContext == OVERRIDE_INHERIT && rule.appContextOverride != OVERRIDE_INHERIT) {
+                appContext = rule.appContextOverride;
+            }
+            if (stripPeriod == OVERRIDE_INHERIT
+                    && rule.stripTrailingPeriodOverride != OVERRIDE_INHERIT) {
+                stripPeriod = rule.stripTrailingPeriodOverride;
+            }
+        }
+        return new BehaviorOverrides(appendOnly, appContext, stripPeriod);
+    }
+
     static List<Rule> parseRulesJson(String raw) {
         if (raw == null || raw.trim().isEmpty()) {
             return Collections.emptyList();
@@ -388,6 +518,10 @@ public final class RamblerCustomInstructionRules {
                 String name = obj.optString("name", "");
                 String instruction = obj.optString("instruction", "");
                 boolean combine = obj.optBoolean("combineWithDefault", false);
+                int appendOnlyOverride = obj.optInt("appendOnlyOverride", OVERRIDE_INHERIT);
+                int appContextOverride = obj.optInt("appContextOverride", OVERRIDE_INHERIT);
+                int stripPeriodOverride =
+                        obj.optInt("stripTrailingPeriodOverride", OVERRIDE_INHERIT);
                 List<String> pkgs = new ArrayList<String>();
                 JSONArray pkgArray = obj.optJSONArray("packages");
                 if (pkgArray != null) {
@@ -398,7 +532,15 @@ public final class RamblerCustomInstructionRules {
                         }
                     }
                 }
-                result.add(new Rule(id, name, instruction, pkgs, combine));
+                result.add(new Rule(
+                        id,
+                        name,
+                        instruction,
+                        pkgs,
+                        combine,
+                        appendOnlyOverride,
+                        appContextOverride,
+                        stripPeriodOverride));
             }
             return result;
         } catch (Throwable throwable) {
@@ -420,6 +562,15 @@ public final class RamblerCustomInstructionRules {
                     obj.put("name", rule.name);
                     obj.put("instruction", rule.instruction);
                     obj.put("combineWithDefault", rule.combineWithDefault);
+                    if (rule.appendOnlyOverride != OVERRIDE_INHERIT) {
+                        obj.put("appendOnlyOverride", rule.appendOnlyOverride);
+                    }
+                    if (rule.appContextOverride != OVERRIDE_INHERIT) {
+                        obj.put("appContextOverride", rule.appContextOverride);
+                    }
+                    if (rule.stripTrailingPeriodOverride != OVERRIDE_INHERIT) {
+                        obj.put("stripTrailingPeriodOverride", rule.stripTrailingPeriodOverride);
+                    }
                     JSONArray pkgArray = new JSONArray();
                     for (String pkg : rule.packages) {
                         pkgArray.put(pkg);

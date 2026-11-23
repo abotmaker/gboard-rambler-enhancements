@@ -153,7 +153,9 @@ val ramblerCursorEditingPatch = bytecodePatch(
 
         val agentic = state.agenticTargets ?: RamblerDynamicResolver.resolveAgenticExtension(this)
             .also { state.agenticTargets = it }
-        val spacing = RamblerDynamicResolver.resolveAppendSpacingTargets(this, agentic.extensionClass)
+        val spacing = state.appendSpacingTargets
+            ?: RamblerDynamicResolver.resolveAppendSpacingTargets(this, agentic.extensionClass)
+                .also { state.appendSpacingTargets = it }
 
         val helperBody = """
             :start
@@ -217,5 +219,23 @@ val ramblerAppContextPatch = bytecodePatch(
 
     execute {
         RamblerPatchStateStore.state(this).selectedFeatures.add(RamblerFeature.APP_CONTEXT)
+    }
+}
+
+@Suppress("unused")
+val ramblerProductivityToolsPatch = bytecodePatch(
+    name = "Rambler Productivity Tools",
+    description = "Adds opt-in hands-free Voice Send & Search suffixes, deterministic Voice Snippets, post-dictation Find & Replace (plain or regex, global or per-app), Strip Trailing Period, Local Dictation History (last 50 entries), Auto Parallel Retry on flaky networks, configurable Longer Dictation Sessions, and one-tap JSON Settings Backup & Restore. $VERSION_NOTE",
+    default = true,
+) {
+    compatibleWith(COMPATIBILITY_GBOARD)
+    dependsOn(
+        ramblerSharedExtensionPatch,
+        ramblerSharedSettingsResourcePatch,
+        ramblerProductivityToolsResourcePatch,
+    )
+
+    execute {
+        RamblerPatchStateStore.state(this).selectedFeatures.add(RamblerFeature.PRODUCTIVITY_TOOLS)
     }
 }

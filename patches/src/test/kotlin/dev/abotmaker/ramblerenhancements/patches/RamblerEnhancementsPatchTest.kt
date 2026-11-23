@@ -9,9 +9,9 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class RamblerEnhancementsPatchTest {
     @Test
-    fun catalogPublishesAllSixSingleAppGboardRamblerPatches() {
+    fun catalogPublishesAllSevenSingleAppGboardRamblerPatches() {
         val patches = PatchCatalog.morpheRegistrations
-        assertEquals(6, patches.size)
+        assertEquals(7, patches.size)
         val names = patches.mapNotNull { it.name }.toSet()
         assertEquals(
             setOf(
@@ -21,6 +21,7 @@ class RamblerEnhancementsPatchTest {
                 "Rambler Contact Names",
                 "Rambler Cursor-Aware Editing",
                 "Rambler App Context",
+                "Rambler Productivity Tools",
             ),
             names,
         )
@@ -97,7 +98,7 @@ class RamblerEnhancementsPatchTest {
             topChildren.last().childElements("Preference").single().androidAttr("key"),
         )
         assertEquals(1, screen.getElementsByTagName("EditTextPreference").length)
-        assertEquals(5, screen.getElementsByTagName("SwitchPreferenceCompat").length)
+        assertEquals(6, screen.getElementsByTagName("SwitchPreferenceCompat").length)
         val switchKeys = (0 until screen.getElementsByTagName("SwitchPreferenceCompat").length).map { idx ->
             (screen.getElementsByTagName("SwitchPreferenceCompat").item(idx) as org.w3c.dom.Element)
                 .androidAttr("key")
@@ -109,11 +110,12 @@ class RamblerEnhancementsPatchTest {
                 CURSOR_EDITING_PREF_KEY,
                 RESELECT_AFTER_EDIT_PREF_KEY,
                 APP_CONTEXT_PREF_KEY,
+                AUTO_PARALLEL_RETRY_PREF_KEY,
             ),
             switchKeys,
         )
 
-        // Partial selection only injects the chosen feature's rows.
+        // Partial selection only injects the chosen feature's rows (+ universal Backup entry).
         val waveformOnlyScreen = parseXml(
             """
             <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
@@ -127,8 +129,9 @@ class RamblerEnhancementsPatchTest {
         assertEquals(0, waveformOnlyScreen.getElementsByTagName("EditTextPreference").length)
         assertEquals(0, waveformOnlyScreen.getElementsByTagName("SwitchPreferenceCompat").length)
         val waveformExtras = waveformOnlyScreen.getElementsByTagName("extra")
-        assertEquals(1, waveformExtras.length)
+        assertEquals(2, waveformExtras.length)
         assertEquals("waveform", (waveformExtras.item(0) as org.w3c.dom.Element).androidAttr("value"))
+        assertEquals("backup", (waveformExtras.item(1) as org.w3c.dom.Element).androidAttr("value"))
 
         val voiceScreen = parseXml(
             """
@@ -396,6 +399,40 @@ class RamblerEnhancementsPatchTest {
             insns[applyIdx].location.codeAddress,
             branch.target.location.codeAddress,
         )
+    }
+
+    @Test
+    fun activateHookUsesInvokeStaticRangeForHighRegisterMethods() {
+        val highRegMethod = app.morphe.patcher.util.proxy.mutableTypes.MutableMethod(
+            com.android.tools.smali.dexlib2.immutable.ImmutableMethod(
+                "Lfhv;",
+                "I",
+                listOf(
+                    com.android.tools.smali.dexlib2.immutable.ImmutableMethodParameter(
+                        "Landroid/view/inputmethod/EditorInfo;",
+                        emptySet(),
+                        null,
+                    ),
+                ),
+                "V",
+                com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value,
+                emptySet(),
+                emptySet(),
+                com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation(
+                    26,
+                    listOf(
+                        com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction10x(
+                            com.android.tools.smali.dexlib2.Opcode.RETURN_VOID,
+                        ),
+                    ),
+                    emptyList(),
+                    emptyList(),
+                ),
+            ),
+        )
+        installExtensionActivateHook(ActivateHookTargets(highRegMethod, "b"))
+        val first = highRegMethod.implementation!!.instructions.first()
+        assertEquals(com.android.tools.smali.dexlib2.Opcode.INVOKE_STATIC_RANGE, first.opcode)
     }
 
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {

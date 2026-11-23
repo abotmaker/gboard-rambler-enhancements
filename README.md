@@ -31,17 +31,18 @@ Standalone [Morphe](https://morphe.software) patch pack for **Gboard Rambler** (
 
 ## Included Patches
 
-All 6 patches appear **directly inside Gboard Settings → Voice typing → Rambler voice typing** in native Material You style (as well as in the unified **Voice typing → Rambler Enhancements** screen). Only controls for the patches you selected in Morphe are shown:
+All 7 patches appear **directly inside Gboard Settings → Voice typing → Rambler voice typing** in native Material You style (as well as in the unified **Voice typing → Rambler Enhancements** screen). Only controls for the patches you selected in Morphe are shown:
 
-- **Custom instructions & Per-app custom instructions** — inline Default editor + per-app rules (apply custom instructions only to selected apps, create named style presets, or disable specific apps via a zero-permission searchable app picker)
+- **Custom instructions & Per-app rules** — inline Default editor + per-app rules (apply custom instructions only to selected apps, create named style presets, override **Append-only**, **App context**, and **Strip trailing period** per app, or exclude apps via a zero-permission searchable app picker)
 - **Waveform** — **Waveform animation (Hex)** (jumps straight into Listening/Processing style, colors, and Hex tuning)
 - **Voice dictionary & contacts** — live **Use dictionary words** switch + **Manage voice dictionary (MUSE_STATS)** + **Contact names sync** (alongside stock *Rambler dictionary* and *Clear all corrected words*)
-- **Dictation behavior** — live switches right on the page for **Append-only dictation**, **Cursor-aware editing**, **Re-select after edit** *(off by default)*, and **App context**
+- **Dictation behavior** — live switches right on the page for **Append-only dictation**, **Cursor-aware editing**, **Re-select after edit** *(off by default)*, **App context**, **Auto parallel retry**, plus **Max dictation duration**
+- **Productivity tools** — **Voice snippets, replace & actions** (opt-in Hands-Free Voice Send & Search suffixes, deterministic Voice Snippets, Find & Replace, Strip Trailing Period), **Dictation history** (last 50 on-device dictations), and **Backup & restore (.json)**
 
 1. **`Rambler Waveform Animation`** *(ported from [Hex by Anomaly](https://github.com/anomalyco/hex))*
    - Replaces Rambler's header light bar with Hex's **Listening** and **Processing** animations, independent colors, and minimal tuning (**Strip trace** vs **iOS halo**, dot spacing, glow strength, voice response).
 2. **`Rambler Custom Instructions`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches))*
-   - Enables persistent custom style/formatting rules sent with Rambler dictations, plus **Per-app custom instructions** (keep Default empty to run only in selected apps, add named rules for different app groups, or exclude apps via **Disabled apps**).
+   - Enables persistent custom style/formatting rules sent with Rambler dictations, plus **Per-app rules** (keep Default empty to run only in selected apps, add named rules for different app groups, set per-app **Append-only / App context / Strip trailing period** overrides, or exclude apps via **Disabled apps**).
 3. **`Rambler Personal Dictionary`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches))*
    - Enables Gboard's `UserFeatureCache` `MUSE_STATS` voice biasing dictionary with add, `.txt` import/export, remove, and clear controls.
 4. **`Rambler Contact Names`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches); depends on `Rambler Personal Dictionary`)*
@@ -50,6 +51,8 @@ All 6 patches appear **directly inside Gboard Settings → Voice typing → Ramb
    - Enables cursor-aware editing, selected-text-only spoken edits, a live **Re-select after edit** toggle *(off by default so follow-up dictations append cleanly instead of re-editing)*, and a live **Append-only dictation** switch (sends `0` surrounding text when nothing is selected so Rambler inserts purely at the cursor with clean boundary spacing).
 6. **`Rambler App Context`** *(credit: [nl-morphe-patches](https://gitlab.com/johninnld/nl-morphe-patches))*
    - Enables sharing the active app name, input type, and field hint so Rambler adapts formatting to the current app (with a live toggle).
+7. **`Rambler Productivity Tools`**
+   - Adds opt-in **Hands-Free Voice Send & Search Suffixes** (e.g. `"pls send the link, hit send"` in Send-capable chat fields), deterministic **Voice Snippets**, post-dictation **Find & Replace** (plain or regex, global or per-app) + **Strip Trailing Period**, private **Local Dictation History** (last 50 entries), **Auto Parallel Retry** on flaky networks, configurable **Longer Dictation Sessions**, and one-tap **JSON Settings Backup & Restore**.
 
 ---
 

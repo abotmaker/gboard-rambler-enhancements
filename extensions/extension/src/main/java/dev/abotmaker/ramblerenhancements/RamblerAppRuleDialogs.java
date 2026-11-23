@@ -318,7 +318,7 @@ final class RamblerAppRuleDialogs {
         appsRowParams.topMargin = dp(activity, 4);
         container.addView(appsPickerRow, appsRowParams);
 
-        TextView instrLabel = makeFieldLabel(activity, "Custom instruction", pal);
+        TextView instrLabel = makeFieldLabel(activity, "Custom instruction (optional if using behavior overrides)", pal);
         LinearLayout.LayoutParams instrLabelParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         instrLabelParams.topMargin = dp(activity, 12);
@@ -329,8 +329,8 @@ final class RamblerAppRuleDialogs {
         instrInput.setInputType(InputType.TYPE_CLASS_TEXT
                 | InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        instrInput.setMinLines(4);
-        instrInput.setMaxLines(9);
+        instrInput.setMinLines(3);
+        instrInput.setMaxLines(8);
         instrInput.setText(existing != null
                 ? existing.instruction
                 : (prefillInstruction == null ? "" : prefillInstruction));
@@ -346,6 +346,39 @@ final class RamblerAppRuleDialogs {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         combineParams.topMargin = dp(activity, 8);
         container.addView(combineBox, combineParams);
+
+        TextView overridesHeader = makeFieldLabel(activity, "Per-app behavior overrides", pal);
+        LinearLayout.LayoutParams overridesHeaderParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        overridesHeaderParams.topMargin = dp(activity, 14);
+        overridesHeaderParams.bottomMargin = dp(activity, 4);
+        container.addView(overridesHeader, overridesHeaderParams);
+
+        final int[] appendOverride = {existing != null
+                ? existing.appendOnlyOverride
+                : RamblerCustomInstructionRules.OVERRIDE_INHERIT};
+        final int[] appContextOverride = {existing != null
+                ? existing.appContextOverride
+                : RamblerCustomInstructionRules.OVERRIDE_INHERIT};
+        final int[] stripPeriodOverride = {existing != null
+                ? existing.stripTrailingPeriodOverride
+                : RamblerCustomInstructionRules.OVERRIDE_INHERIT};
+
+        container.addView(makeTriStateRow(
+                activity,
+                "Append-only dictation",
+                appendOverride,
+                pal));
+        container.addView(makeTriStateRow(
+                activity,
+                "App context",
+                appContextOverride,
+                pal));
+        container.addView(makeTriStateRow(
+                activity,
+                "Strip trailing period",
+                stripPeriodOverride,
+                pal));
 
         AlertDialog.Builder builder = new AlertDialog.Builder(activity)
                 .setTitle(existing == null ? "Add app rule" : "Edit app rule")
@@ -363,8 +396,15 @@ final class RamblerAppRuleDialogs {
                     String instr = instrInput.getText() == null
                             ? ""
                             : instrInput.getText().toString().trim();
-                    if (instr.isEmpty()) {
-                        Toast.makeText(activity, "Enter a custom instruction.", Toast.LENGTH_SHORT)
+                    boolean hasOverride =
+                            appendOverride[0] != RamblerCustomInstructionRules.OVERRIDE_INHERIT
+                                    || appContextOverride[0] != RamblerCustomInstructionRules.OVERRIDE_INHERIT
+                                    || stripPeriodOverride[0] != RamblerCustomInstructionRules.OVERRIDE_INHERIT;
+                    if (instr.isEmpty() && !hasOverride) {
+                        Toast.makeText(
+                                        activity,
+                                        "Enter a custom instruction or set a behavior override.",
+                                        Toast.LENGTH_SHORT)
                                 .show();
                         return;
                     }
@@ -380,12 +420,64 @@ final class RamblerAppRuleDialogs {
                         name = "Selected apps";
                     }
                     onSave.accept(new RamblerCustomInstructionRules.Rule(
-                            ruleId, name, instr, chosenPackages, combineBox.isChecked()));
+                            ruleId,
+                            name,
+                            instr,
+                            chosenPackages,
+                            combineBox.isChecked(),
+                            appendOverride[0],
+                            appContextOverride[0],
+                            stripPeriodOverride[0]));
                     dialog.dismiss();
                 });
             }
         });
         dialog.show();
+    }
+
+    private static View makeTriStateRow(
+            Activity activity,
+            String label,
+            int[] stateHolder,
+            RamblerWaveformDialogs.Palette pal) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(activity, 12), dp(activity, 9), dp(activity, 12), dp(activity, 9));
+        row.setBackground(RamblerWaveformDialogs.tileBackground(activity, false));
+        row.setClickable(true);
+        row.setFocusable(true);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(label);
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        titleView.setTextColor(pal.primary);
+        row.addView(titleView, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+
+        TextView valueView = new TextView(activity);
+        valueView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        valueView.setTypeface(Typeface.DEFAULT_BOLD);
+        Runnable syncValue = () -> {
+            valueView.setText(RamblerCustomInstructionRules.formatOverrideLabel(stateHolder[0]));
+            valueView.setTextColor(
+                    stateHolder[0] == RamblerCustomInstructionRules.OVERRIDE_INHERIT
+                            ? pal.secondary
+                            : pal.accent);
+        };
+        syncValue.run();
+        row.addView(valueView);
+
+        row.setOnClickListener(v -> {
+            stateHolder[0] = (stateHolder[0] + 1) % 3;
+            syncValue.run();
+        });
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = dp(activity, 5);
+        row.setLayoutParams(params);
+        return row;
     }
 
     private static void showManualPackageDialog(

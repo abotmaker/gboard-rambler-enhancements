@@ -45,6 +45,17 @@ public final class RamblerFlagRuntime {
     // App context
     public static final String APP_CONTEXT_FLAG = "agentic_dictation_enable_app_info_context";
 
+    // Reliability & session duration (v1.2.0 Productivity Tools)
+    public static final String AUTO_PARALLEL_RETRY_FLAG =
+            "agentic_dictation_enable_auto_parallel_retry";
+    public static final String PCM_AUDIO_CACHING_FLAG =
+            "enable_pcm_audio_caching_for_offline_fallback";
+    public static final String DEFER_ERROR_PROPAGATION_FLAG =
+            "jetson_defer_error_propagation_on_network_failure";
+    public static final String MAX_SESSION_DURATION_FLAG =
+            "jetson_max_session_duration_seconds";
+    public static final String TIMEOUT_WARNING_FLAG = "jetson_timeout_warning_seconds";
+
     private static final Object FLAG_CACHE_LOCK = new Object();
     private static final WeakHashMap<Object, String> LIVE_TOGGLE_FLAGS =
             new WeakHashMap<Object, String>();
@@ -53,6 +64,7 @@ public final class RamblerFlagRuntime {
     private static final AtomicBoolean PREF_LISTENER_ATTACHED = new AtomicBoolean(false);
 
     private static volatile Context applicationContext;
+    private static volatile String activePackageName;
     private static volatile FlagHandles cachedHandles;
     private static volatile SharedPreferences.OnSharedPreferenceChangeListener livePrefListener;
     private static volatile Boolean useDictionaryWordsOverrideForTesting;
@@ -60,6 +72,8 @@ public final class RamblerFlagRuntime {
     private static volatile Boolean cursorEditingOverrideForTesting;
     private static volatile Boolean reselectAfterEditOverrideForTesting;
     private static volatile Boolean appContextOverrideForTesting;
+    private static volatile Boolean autoParallelRetryOverrideForTesting;
+    private static volatile Integer maxSessionSecondsOverrideForTesting;
 
     private RamblerFlagRuntime() {
     }
@@ -157,12 +171,23 @@ public final class RamblerFlagRuntime {
         appContextOverrideForTesting = enabled;
     }
 
+    static void setAutoParallelRetryOverrideForTesting(Boolean enabled) {
+        autoParallelRetryOverrideForTesting = enabled;
+    }
+
+    static void setMaxSessionSecondsOverrideForTesting(Integer seconds) {
+        maxSessionSecondsOverrideForTesting = seconds;
+    }
+
     static void clearForTesting() {
         useDictionaryWordsOverrideForTesting = null;
         appendOnlyOverrideForTesting = null;
         cursorEditingOverrideForTesting = null;
         reselectAfterEditOverrideForTesting = null;
         appContextOverrideForTesting = null;
+        autoParallelRetryOverrideForTesting = null;
+        maxSessionSecondsOverrideForTesting = null;
+        activePackageName = null;
         applicationContext = null;
         cachedHandles = null;
         livePrefListener = null;
@@ -172,6 +197,27 @@ public final class RamblerFlagRuntime {
         RamblerEnhancementsSettings.clearGboardBridgeForTesting();
         synchronized (FLAG_CACHE_LOCK) {
             LIVE_TOGGLE_FLAGS.clear();
+        }
+    }
+
+    public static String getActivePackageName() {
+        return activePackageName;
+    }
+
+    /**
+     * Updates the foreground app package name and immediately refreshes cached live flags so
+     * per-app Append-only and App context overrides take effect before Rambler reads surrounding
+     * text or constructs the session Bundle.
+     */
+    public static void onActivePackageChanged(Context context, String packageName) {
+        if (context != null) {
+            seedApplicationContext(context);
+        }
+        String normalized = packageName == null ? "" : packageName.trim();
+        String previous = activePackageName == null ? "" : activePackageName;
+        activePackageName = normalized.isEmpty() ? null : normalized;
+        if (!normalized.equals(previous)) {
+            refreshLiveFlags();
         }
     }
 
@@ -194,7 +240,19 @@ public final class RamblerFlagRuntime {
         if (override != null) {
             return override.booleanValue();
         }
-        return RamblerEnhancementsSettings.readAppendOnly(resolveContext());
+        Context ctx = resolveContext();
+        String pkg = activePackageName;
+        if (ctx != null && pkg != null && !pkg.isEmpty()) {
+            RamblerCustomInstructionRules.BehaviorOverrides appOverrides =
+                    RamblerCustomInstructionRules.resolveBehaviorOverrides(ctx, pkg);
+            if (appOverrides.appendOnly == RamblerCustomInstructionRules.OVERRIDE_ON) {
+                return true;
+            }
+            if (appOverrides.appendOnly == RamblerCustomInstructionRules.OVERRIDE_OFF) {
+                return false;
+            }
+        }
+        return RamblerEnhancementsSettings.readAppendOnly(ctx);
     }
 
     public static boolean isCursorEditingEnabled() {
@@ -227,7 +285,41 @@ public final class RamblerFlagRuntime {
         if (override != null) {
             return override.booleanValue();
         }
-        return RamblerEnhancementsSettings.readAppContextEnabled(resolveContext());
+        Context ctx = resolveContext();
+        String pkg = activePackageName;
+        if (ctx != null && pkg != null && !pkg.isEmpty()) {
+            RamblerCustomInstructionRules.BehaviorOverrides appOverrides =
+                    RamblerCustomInstructionRules.resolveBehaviorOverrides(ctx, pkg);
+            if (appOverrides.appContext == RamblerCustomInstructionRules.OVERRIDE_ON) {
+                return true;
+            }
+            if (appOverrides.appContext == RamblerCustomInstructionRules.OVERRIDE_OFF) {
+                return false;
+            }
+        }
+        return RamblerEnhancementsSettings.readAppContextEnabled(ctx);
+    }
+
+    public static boolean isAutoParallelRetryEnabled() {
+        if (!RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
+            return false;
+        }
+        Boolean override = autoParallelRetryOverrideForTesting;
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return RamblerEnhancementsSettings.readAutoParallelRetryEnabled(resolveContext());
+    }
+
+    public static int getMaxSessionDurationSeconds() {
+        if (!RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
+            return 0;
+        }
+        Integer override = maxSessionSecondsOverrideForTesting;
+        if (override != null) {
+            return RamblerEnhancementsSettings.normalizeMaxSessionSeconds(override.intValue());
+        }
+        return RamblerEnhancementsSettings.readMaxSessionSeconds(resolveContext());
     }
 
     /**
@@ -321,6 +413,41 @@ public final class RamblerFlagRuntime {
                 }
                 rememberLiveFlag(flagInstance, flagName);
                 return isAppContextEnabled() ? enableBoolean(rawValue) : rawValue;
+
+            case AUTO_PARALLEL_RETRY_FLAG:
+            case PCM_AUDIO_CACHING_FLAG:
+            case DEFER_ERROR_PROPAGATION_FLAG:
+                if (!RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
+                    return rawValue;
+                }
+                rememberLiveFlag(flagInstance, flagName);
+                return isAutoParallelRetryEnabled() ? enableBoolean(rawValue) : rawValue;
+
+            case MAX_SESSION_DURATION_FLAG:
+                if (!RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
+                    return rawValue;
+                }
+                rememberLiveFlag(flagInstance, flagName);
+                if (rawValue instanceof Long) {
+                    int maxSeconds = getMaxSessionDurationSeconds();
+                    if (maxSeconds > 0) {
+                        return Long.valueOf((long) maxSeconds);
+                    }
+                }
+                return rawValue;
+
+            case TIMEOUT_WARNING_FLAG:
+                if (!RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
+                    return rawValue;
+                }
+                rememberLiveFlag(flagInstance, flagName);
+                if (rawValue instanceof Long) {
+                    int maxSeconds = getMaxSessionDurationSeconds();
+                    if (maxSeconds > 0 && maxSeconds < 30) {
+                        return Long.valueOf(Math.max(5L, maxSeconds / 4L));
+                    }
+                }
+                return rawValue;
 
             default:
                 return rawValue;
@@ -471,7 +598,7 @@ public final class RamblerFlagRuntime {
                 || block == Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS;
     }
 
-    private static Context resolveContext() {
+    static Context resolveContext() {
         Context cached = applicationContext;
         if (cached != null) {
             return cached;

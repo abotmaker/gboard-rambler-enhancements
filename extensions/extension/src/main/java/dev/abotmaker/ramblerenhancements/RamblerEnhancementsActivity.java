@@ -48,6 +48,8 @@ public final class RamblerEnhancementsActivity extends Activity {
     private static final int REQ_IMPORT_WORDS = 4101;
     private static final int REQ_EXPORT_WORDS = 4102;
     private static final int REQ_CONTACTS_PERMISSION = 4103;
+    private static final int REQ_EXPORT_BACKUP = 4104;
+    private static final int REQ_IMPORT_BACKUP = 4105;
     private static final int PREVIEW_WORD_LIMIT = 12;
     private static final String EXPORT_FILE_NAME = "rambler-voice-dictionary.txt";
 
@@ -110,6 +112,9 @@ public final class RamblerEnhancementsActivity extends Activity {
     public static final String SECTION_CUSTOM_INSTRUCTIONS = "custom_instructions";
     public static final String SECTION_DICTIONARY = "dictionary";
     public static final String SECTION_CONTACTS = "contacts";
+    public static final String SECTION_PRODUCTIVITY = "productivity";
+    public static final String SECTION_HISTORY = "history";
+    public static final String SECTION_BACKUP = "backup";
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private LinearLayout contentContainer;
@@ -200,6 +205,28 @@ public final class RamblerEnhancementsActivity extends Activity {
                         ? "Exported Rambler voice dictionary."
                         : "Failed to write export file.");
             });
+        } else if (requestCode == REQ_EXPORT_BACKUP) {
+            final String payload = pendingExportPayload;
+            pendingExportPayload = null;
+            if (payload == null) {
+                return;
+            }
+            runAsync(() -> {
+                boolean ok = writeTextToUri(uri, payload);
+                toastOnMain(ok
+                        ? "Exported Rambler Enhancements backup (.json)."
+                        : "Failed to write backup file.");
+            });
+        } else if (requestCode == REQ_IMPORT_BACKUP) {
+            runAsync(() -> {
+                String content = readTextFromUri(uri);
+                RamblerBackupManager.ImportResult result =
+                        RamblerBackupManager.importJson(this, content);
+                mainHandler.post(() -> {
+                    showToast(result.message);
+                    refreshUi();
+                });
+            });
         }
     }
 
@@ -225,13 +252,22 @@ public final class RamblerEnhancementsActivity extends Activity {
             return "Waveform animation (Hex)";
         }
         if (SECTION_CUSTOM_INSTRUCTIONS.equals(section)) {
-            return "Per-app custom instructions";
+            return "Per-app rules & instructions";
         }
         if (SECTION_DICTIONARY.equals(section)) {
             return "Rambler voice dictionary";
         }
         if (SECTION_CONTACTS.equals(section)) {
             return "Contact names sync";
+        }
+        if (SECTION_PRODUCTIVITY.equals(section)) {
+            return "Voice snippets, replace & actions";
+        }
+        if (SECTION_HISTORY.equals(section)) {
+            return "Dictation history";
+        }
+        if (SECTION_BACKUP.equals(section)) {
+            return "Backup & restore";
         }
         return "Rambler Enhancements";
     }
@@ -249,8 +285,14 @@ public final class RamblerEnhancementsActivity extends Activity {
         if (RamblerDynamicConfig.FEATURE_WAVEFORM && showSection(SECTION_WAVEFORM)) {
             buildWaveformSection();
         }
-        if (RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS && showSection("custom_instructions")) {
+        if (RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS && showSection(SECTION_CUSTOM_INSTRUCTIONS)) {
             buildCustomInstructionsSection();
+        }
+        if (RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS && showSection(SECTION_PRODUCTIVITY)) {
+            buildProductivitySection();
+        }
+        if (RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS && showSection(SECTION_HISTORY)) {
+            buildHistorySection();
         }
         if (RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY && showSection(SECTION_DICTIONARY)) {
             buildPersonalDictionarySection();
@@ -258,9 +300,14 @@ public final class RamblerEnhancementsActivity extends Activity {
         if (RamblerDynamicConfig.FEATURE_CONTACT_NAMES && showSection(SECTION_CONTACTS)) {
             buildContactsSection();
         }
-        if ((RamblerDynamicConfig.FEATURE_CURSOR_EDITING || RamblerDynamicConfig.FEATURE_APP_CONTEXT)
+        if ((RamblerDynamicConfig.FEATURE_CURSOR_EDITING
+                || RamblerDynamicConfig.FEATURE_APP_CONTEXT
+                || RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS)
                 && showSection("behavior")) {
             buildDictationBehaviorSection();
+        }
+        if (showSection(SECTION_BACKUP)) {
+            buildBackupSection();
         }
 
         // Credits footer
@@ -486,13 +533,21 @@ public final class RamblerEnhancementsActivity extends Activity {
         for (RamblerCustomInstructionRules.Rule rule : rules) {
             String appSummary = RamblerCustomInstructionRules.formatPackageList(
                     rule.packages, labels, 4);
-            String promptPreview = rule.instruction.length() > 96
-                    ? rule.instruction.substring(0, 96) + "…"
-                    : rule.instruction;
+            String promptPreview = rule.instruction.isEmpty()
+                    ? "(Behavior overrides only)"
+                    : (rule.instruction.length() > 96
+                            ? rule.instruction.substring(0, 96) + "…"
+                            : rule.instruction);
             String modeTag = rule.combineWithDefault ? " · +Default" : "";
+            String overrideBadges = rule.formatBehaviorOverrideBadges();
+            StringBuilder summaryBuilder = new StringBuilder(appSummary).append(modeTag);
+            if (!overrideBadges.isEmpty()) {
+                summaryBuilder.append('\n').append(overrideBadges);
+            }
+            summaryBuilder.append('\n').append(promptPreview);
             addRow(
                     rule.displayName(),
-                    appSummary + modeTag + "\n" + promptPreview,
+                    summaryBuilder.toString(),
                     rule.packages.size() + (rule.packages.size() == 1 ? " app" : " apps"),
                     true,
                     () -> withInstalledApps((apps, map) -> RamblerAppRuleDialogs.showRuleEditorDialog(
@@ -805,6 +860,266 @@ public final class RamblerEnhancementsActivity extends Activity {
                         refreshUi();
                     });
         }
+        if (RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
+            addToggleRow(
+                    "Auto parallel retry (flaky networks)",
+                    "Buffers PCM audio locally and silently retries dictation in parallel when Wi-Fi or 5G drops instead of failing.",
+                    RamblerEnhancementsSettings.readAutoParallelRetryEnabled(this),
+                    checked -> {
+                        RamblerEnhancementsSettings.writeAutoParallelRetryEnabled(this, checked);
+                        refreshUi();
+                    });
+            int maxSec = RamblerEnhancementsSettings.readMaxSessionSeconds(this);
+            addRow(
+                    "Max dictation duration",
+                    "Override Rambler's session timeout so long voice dumps aren't cut off early ("
+                            + RamblerTextPipeline.formatDurationLabel(maxSec) + ").",
+                    RamblerTextPipeline.formatDurationBadge(maxSec),
+                    true,
+                    () -> RamblerProductivityDialogs.showSessionDurationDialog(
+                            this,
+                            maxSec,
+                            chosen -> {
+                                RamblerEnhancementsSettings.writeMaxSessionSeconds(this, chosen);
+                                showToast("Max dictation duration: "
+                                        + RamblerTextPipeline.formatDurationLabel(chosen));
+                                refreshUi();
+                            }));
+        }
+    }
+
+    private void buildProductivitySection() {
+        ensureInstalledAppsLoadedAsync();
+        addSectionHeader("Hands-free voice actions");
+        boolean sendOn = RamblerEnhancementsSettings.readVoiceSendEnabled(this);
+        String sendTriggers = RamblerEnhancementsSettings.readVoiceSendTriggers(this);
+        addToggleRow(
+                "Voice send suffix",
+                "Say a trigger phrase at the end of a dictation (e.g. \"pls send the link, hit send\") to strip it, insert the message, and tap Send automatically. Only fires in fields with a Send button.",
+                sendOn,
+                checked -> {
+                    RamblerEnhancementsSettings.writeVoiceSendEnabled(this, checked);
+                    refreshUi();
+                });
+        addRow(
+                "Send trigger phrases",
+                sendTriggers.isEmpty()
+                        ? "No triggers configured (comma-separated)."
+                        : sendTriggers,
+                sendOn ? "Edit" : "Off",
+                sendOn,
+                () -> showTextInputDialog(
+                        "Voice send triggers",
+                        "Comma-separated end phrases (e.g. hit send, send it)",
+                        sendTriggers,
+                        val -> {
+                            RamblerEnhancementsSettings.writeVoiceSendTriggers(this, val);
+                            showToast("Saved send triggers.");
+                            refreshUi();
+                        }));
+
+        boolean searchOn = RamblerEnhancementsSettings.readVoiceSearchEnabled(this);
+        String searchTriggers = RamblerEnhancementsSettings.readVoiceSearchTriggers(this);
+        addToggleRow(
+                "Voice search suffix",
+                "Say a trigger phrase at the end of a query (e.g. \"weather in tokyo, hit search\") to submit automatically in Search fields.",
+                searchOn,
+                checked -> {
+                    RamblerEnhancementsSettings.writeVoiceSearchEnabled(this, checked);
+                    refreshUi();
+                });
+        addRow(
+                "Search trigger phrases",
+                searchTriggers.isEmpty()
+                        ? "No triggers configured (comma-separated)."
+                        : searchTriggers,
+                searchOn ? "Edit" : "Off",
+                searchOn,
+                () -> showTextInputDialog(
+                        "Voice search triggers",
+                        "Comma-separated end phrases (e.g. hit search, search it)",
+                        searchTriggers,
+                        val -> {
+                            RamblerEnhancementsSettings.writeVoiceSearchTriggers(this, val);
+                            showToast("Saved search triggers.");
+                            refreshUi();
+                        }));
+
+        addSectionHeader("Voice snippets & Find / Replace");
+        addToggleRow(
+                "Strip trailing period",
+                "Removes the final period at the end of casual dictations while keeping ellipses (…) and abbreviations (e.g., Dr.). Can also be overridden per app in Per-app rules.",
+                RamblerEnhancementsSettings.readStripTrailingPeriod(this),
+                checked -> {
+                    RamblerEnhancementsSettings.writeStripTrailingPeriod(this, checked);
+                    refreshUi();
+                });
+
+        List<RamblerTextPipeline.SnippetRule> snippets = RamblerTextPipeline.readSnippets(this);
+        for (RamblerTextPipeline.SnippetRule snippet : snippets) {
+            String preview = snippet.expansion.length() > 80
+                    ? snippet.expansion.substring(0, 80) + "…"
+                    : snippet.expansion;
+            addRow(
+                    "\"" + snippet.trigger + "\"",
+                    "→ " + preview,
+                    snippet.enabled ? "Snippet" : "Paused",
+                    true,
+                    () -> RamblerProductivityDialogs.showSnippetEditorDialog(
+                            this,
+                            snippet,
+                            updated -> {
+                                RamblerTextPipeline.upsertSnippet(this, updated);
+                                showToast("Saved snippet.");
+                                refreshUi();
+                            },
+                            () -> {
+                                RamblerTextPipeline.deleteSnippet(this, snippet.id);
+                                showToast("Deleted snippet.");
+                                refreshUi();
+                            }));
+        }
+        addRow(
+                "+ Add voice snippet",
+                "Expand a spoken phrase deterministically into an exact email, URL, handle, or template.",
+                snippets.size() + " saved",
+                true,
+                () -> RamblerProductivityDialogs.showSnippetEditorDialog(
+                        this,
+                        null,
+                        created -> {
+                            RamblerTextPipeline.upsertSnippet(this, created);
+                            showToast("Added snippet.");
+                            refreshUi();
+                        },
+                        null));
+
+        List<RamblerTextPipeline.ReplaceRule> replaceRules =
+                RamblerTextPipeline.readReplaceRules(this);
+        java.util.Map<String, String> labels = packageLabelCache;
+        for (RamblerTextPipeline.ReplaceRule rule : replaceRules) {
+            StringBuilder meta = new StringBuilder();
+            meta.append("→ ").append(rule.replace.isEmpty() ? "(delete)" : rule.replace);
+            if (rule.regex) {
+                meta.append(" · Regex");
+            }
+            if (rule.caseSensitive) {
+                meta.append(" · Case");
+            }
+            if (!rule.packages.isEmpty()) {
+                meta.append(" · ").append(RamblerCustomInstructionRules.formatPackageList(
+                        rule.packages, labels, 2));
+            }
+            addRow(
+                    "Replace \"" + rule.find + "\"",
+                    meta.toString(),
+                    rule.enabled ? "Active" : "Paused",
+                    true,
+                    () -> withInstalledApps((apps, map) ->
+                            RamblerProductivityDialogs.showReplaceRuleEditorDialog(
+                                    this,
+                                    rule,
+                                    apps,
+                                    map,
+                                    updated -> {
+                                        RamblerTextPipeline.upsertReplaceRule(this, updated);
+                                        showToast("Saved replace rule.");
+                                        refreshUi();
+                                    },
+                                    () -> {
+                                        RamblerTextPipeline.deleteReplaceRule(this, rule.id);
+                                        showToast("Deleted replace rule.");
+                                        refreshUi();
+                                    })));
+        }
+        addRow(
+                "+ Add find & replace rule",
+                "Automatically fix recurring misspellings or formatting (plain text or regex, global or per-app).",
+                replaceRules.size() + " saved",
+                true,
+                () -> withInstalledApps((apps, map) ->
+                        RamblerProductivityDialogs.showReplaceRuleEditorDialog(
+                                this,
+                                null,
+                                apps,
+                                map,
+                                created -> {
+                                    RamblerTextPipeline.upsertReplaceRule(this, created);
+                                    showToast("Added replace rule.");
+                                    refreshUi();
+                                },
+                                null)));
+    }
+
+    private void buildHistorySection() {
+        ensureInstalledAppsLoadedAsync();
+        addSectionHeader("Local dictation history");
+        boolean historyOn = RamblerEnhancementsSettings.readHistoryEnabled(this);
+        List<RamblerTextPipeline.HistoryEntry> history = RamblerTextPipeline.readHistory(this);
+        addToggleRow(
+                "Keep local dictation history",
+                "Privately stores your last " + RamblerTextPipeline.MAX_HISTORY_ENTRIES
+                        + " Rambler dictations on device so you never lose a lost or overwritten paste.",
+                historyOn,
+                checked -> {
+                    RamblerEnhancementsSettings.writeHistoryEnabled(this, checked);
+                    refreshUi();
+                });
+        addRow(
+                "View dictation history",
+                history.isEmpty()
+                        ? "No dictations saved yet."
+                        : "Latest: " + (history.get(0).text.length() > 80
+                                ? history.get(0).text.substring(0, 80) + "…"
+                                : history.get(0).text),
+                history.size() + " saved",
+                true,
+                () -> RamblerProductivityDialogs.showHistoryDialog(
+                        this, packageLabelCache, this::refreshUi));
+    }
+
+    private void buildBackupSection() {
+        addSectionHeader("Backup & restore");
+        addRow(
+                "Export all settings (.json)",
+                "Save waveform preset/colors, per-app rules, snippets, find/replace rules, behavior toggles, and voice dictionary words into one portable JSON file.",
+                "Export",
+                true,
+                () -> runAsync(() -> {
+                    String payload = RamblerBackupManager.exportJson(this);
+                    mainHandler.post(() -> {
+                        pendingExportPayload = payload;
+                        try {
+                            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                            intent.addCategory(Intent.CATEGORY_OPENABLE);
+                            intent.setType("application/json");
+                            intent.putExtra(Intent.EXTRA_TITLE, RamblerBackupManager.BACKUP_FILE_NAME);
+                            startActivityForResult(intent, REQ_EXPORT_BACKUP);
+                        } catch (Throwable err) {
+                            Log.w(TAG, "Backup export picker failed", err);
+                            pendingExportPayload = null;
+                            showToast("Could not open save dialog.");
+                        }
+                    });
+                }));
+        addRow(
+                "Import settings (.json)",
+                "Restore a previously exported Rambler Enhancements backup file.",
+                "Import",
+                true,
+                () -> {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        intent.setType("*/*");
+                        intent.putExtra(Intent.EXTRA_MIME_TYPES,
+                                new String[]{"application/json", "text/plain", "*/*"});
+                        startActivityForResult(intent, REQ_IMPORT_BACKUP);
+                    } catch (Throwable err) {
+                        Log.w(TAG, "Backup import picker failed", err);
+                        showToast("Could not open file picker.");
+                    }
+                });
     }
 
     private void syncContactsNow() {

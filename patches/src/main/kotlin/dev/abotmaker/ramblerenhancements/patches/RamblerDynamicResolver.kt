@@ -111,6 +111,20 @@ internal data class SessionBundleTargets(
     val returnIndicesAndRegisters: List<Pair<Int, Int>>,
 )
 
+internal data class ActivateHookTargets(
+    val activateMethod: MutableMethod,
+    val contextField: String,
+)
+
+internal data class CommitPipelineTargets(
+    val targetMethod: MutableMethod,
+    val insertIndex: Int,
+    val pcnRegister: Int,
+    val textRegister: Int,
+    val pcnGetEditorInfoMethod: String,
+    val pcnPerformActionMethod: String,
+)
+
 internal object RamblerDynamicResolver {
     private const val CONTEXT_TYPE = "Landroid/content/Context;"
     private const val INTENT_TYPE = "Landroid/content/Intent;"
@@ -550,6 +564,111 @@ internal object RamblerDynamicResolver {
             pdxType = resolvedPdxType,
             beforeCursorMethodName = resolvedBefore,
             afterCursorMethodName = resolvedAfter,
+        )
+    }
+
+    fun resolveActivateHookTargets(extensionClass: MutableClass): ActivateHookTargets {
+        val activateMethod = extensionClass.methods.singleOrNull { method ->
+            method.parameterTypes.map { it.toString() } == listOf(EDITOR_INFO_TYPE) &&
+                method.returnType == "V" &&
+                method.containsString("onActivateInternal")
+        } ?: throw PatchException(
+            "Could not uniquely locate onActivateInternal(EditorInfo)V on ${extensionClass.type}",
+        )
+        val impl = activateMethod.implementation
+            ?: throw PatchException("onActivateInternal ${activateMethod.name} has no body")
+        if (impl.registerCount < 2) {
+            throw PatchException(
+                "onActivateInternal ${activateMethod.name} has unexpected register count ${impl.registerCount}",
+            )
+        }
+        val contextField = extensionClass.instanceFields
+            .firstOrNull { it.type == CONTEXT_TYPE }
+            ?.name
+            ?: "b"
+        return ActivateHookTargets(
+            activateMethod = activateMethod,
+            contextField = contextField,
+        )
+    }
+
+    fun resolveCommitPipelineTargets(
+        context: BytecodePatchContext,
+        spacing: AppendSpacingTargets,
+    ): CommitPipelineTargets {
+        val insns = spacing.targetMethod.implementation?.instructions?.toList()
+            ?: throw PatchException("Commit target method ${spacing.targetMethod.name} has no body")
+
+        // Walk backward from the direct-append call (spacing.callIndex) to the `if-eqz` branch
+        // that separates direct-append from diff-edit, then find the `beginBatchEdit()V` call
+        // on `pcn` right before that branch. Inserting at `beginBatchIndex + 1` transforms
+        // `vText` for BOTH direct-append and diff-edit paths while keeping incoming jump labels
+        // pointing at `beginBatchEdit`.
+        val branchIdx = ((spacing.callIndex - 1) downTo maxOf(0, spacing.callIndex - 16))
+            .firstOrNull { idx -> insns[idx].opcode == Opcode.IF_EQZ }
+            ?: throw PatchException(
+                "Could not locate direct-append branch before callIndex=${spacing.callIndex} in " +
+                    "${spacing.extensionClass.type}->${spacing.targetMethod.name}",
+            )
+
+        val beginBatchIdx = ((branchIdx - 1) downTo maxOf(0, branchIdx - 16))
+            .firstOrNull { idx ->
+                val insn = insns[idx]
+                if (insn.opcode != Opcode.INVOKE_INTERFACE && insn.opcode != Opcode.INVOKE_INTERFACE_RANGE) {
+                    return@firstOrNull false
+                }
+                val ref = (insn as? ReferenceInstruction)?.reference as? MethodReference
+                    ?: return@firstOrNull false
+                if (ref.definingClass != spacing.pcnType ||
+                    ref.parameterTypes.isNotEmpty() ||
+                    ref.returnType != "V"
+                ) {
+                    return@firstOrNull false
+                }
+                val recvReg = when (insn) {
+                    is FiveRegisterInstruction -> insn.registerC
+                    is RegisterRangeInstruction -> insn.startRegister
+                    else -> -1
+                }
+                recvReg == spacing.pcnRegister
+            } ?: throw PatchException(
+            "Could not locate beginBatchEdit()V on ${spacing.pcnType} before branchIdx=$branchIdx in " +
+                "${spacing.extensionClass.type}->${spacing.targetMethod.name}",
+        )
+
+        val pcnClass = context.classDefByOrNull(spacing.pcnType) ?: throw PatchException(
+            "Could not resolve input connection interface ${spacing.pcnType}",
+        )
+        val getEditorInfoMethod = pcnClass.methods.singleOrNull { method ->
+            method.parameterTypes.isEmpty() && method.returnType == EDITOR_INFO_TYPE
+        }?.name ?: throw PatchException(
+            "Could not resolve ()EditorInfo method on ${spacing.pcnType}",
+        )
+
+        var performActionMethod: String? = null
+        context.classDefForEach { cls ->
+            if (performActionMethod != null) return@classDefForEach
+            if (!cls.interfaces.contains(spacing.pcnType)) return@classDefForEach
+            val found = cls.methods.firstOrNull { method ->
+                method.parameterTypes.map { it.toString() } == listOf("I") &&
+                    method.returnType == "V" &&
+                    method.containsString("InputConnectionWrapper.performEditorAction")
+            }
+            if (found != null) {
+                performActionMethod = found.name
+            }
+        }
+        val resolvedPerformAction = performActionMethod ?: throw PatchException(
+            "Could not resolve performEditorAction(I)V implementation of ${spacing.pcnType}",
+        )
+
+        return CommitPipelineTargets(
+            targetMethod = spacing.targetMethod,
+            insertIndex = beginBatchIdx + 1,
+            pcnRegister = spacing.pcnRegister,
+            textRegister = spacing.textRegister,
+            pcnGetEditorInfoMethod = getEditorInfoMethod,
+            pcnPerformActionMethod = resolvedPerformAction,
         )
     }
 

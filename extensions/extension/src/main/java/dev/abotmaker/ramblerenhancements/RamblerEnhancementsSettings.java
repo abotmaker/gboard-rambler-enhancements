@@ -35,6 +35,22 @@ public final class RamblerEnhancementsSettings {
             "pref_rambler_reselect_after_edit";
     public static final String PREF_KEY_APP_CONTEXT_ENABLED =
             "pref_rambler_app_context_enabled";
+    public static final String PREF_KEY_AUTO_PARALLEL_RETRY =
+            "pref_rambler_auto_parallel_retry";
+    public static final String PREF_KEY_MAX_SESSION_SECONDS =
+            "pref_rambler_max_session_seconds";
+    public static final String PREF_KEY_STRIP_TRAILING_PERIOD =
+            "pref_rambler_strip_trailing_period";
+    public static final String PREF_KEY_VOICE_SEND_ENABLED =
+            "pref_rambler_voice_send_enabled";
+    public static final String PREF_KEY_VOICE_SEND_TRIGGERS =
+            "pref_rambler_voice_send_triggers";
+    public static final String PREF_KEY_VOICE_SEARCH_ENABLED =
+            "pref_rambler_voice_search_enabled";
+    public static final String PREF_KEY_VOICE_SEARCH_TRIGGERS =
+            "pref_rambler_voice_search_triggers";
+    public static final String PREF_KEY_HISTORY_ENABLED =
+            "pref_rambler_history_enabled";
     public static final String PREF_KEY_SEEDED_CONTACTS =
             "pref_rambler_contacts_seeded_names";
 
@@ -43,7 +59,8 @@ public final class RamblerEnhancementsSettings {
             PREF_KEY_APPEND_ONLY,
             PREF_KEY_CURSOR_EDITING_ENABLED,
             PREF_KEY_RESELECT_AFTER_EDIT,
-            PREF_KEY_APP_CONTEXT_ENABLED
+            PREF_KEY_APP_CONTEXT_ENABLED,
+            PREF_KEY_AUTO_PARALLEL_RETRY
     };
 
     public static final boolean DEFAULT_USE_DICTIONARY_WORDS = true;
@@ -51,6 +68,16 @@ public final class RamblerEnhancementsSettings {
     public static final boolean DEFAULT_CURSOR_EDITING_ENABLED = true;
     public static final boolean DEFAULT_RESELECT_AFTER_EDIT = false;
     public static final boolean DEFAULT_APP_CONTEXT_ENABLED = true;
+    public static final boolean DEFAULT_AUTO_PARALLEL_RETRY = false;
+    public static final int DEFAULT_MAX_SESSION_SECONDS = 0; // 0 = Gboard stock default
+    public static final int MIN_CUSTOM_SESSION_SECONDS = 30;
+    public static final int MAX_CUSTOM_SESSION_SECONDS = 3600;
+    public static final boolean DEFAULT_STRIP_TRAILING_PERIOD = false;
+    public static final boolean DEFAULT_VOICE_SEND_ENABLED = false;
+    public static final String DEFAULT_VOICE_SEND_TRIGGERS = "hit send, send it";
+    public static final boolean DEFAULT_VOICE_SEARCH_ENABLED = false;
+    public static final String DEFAULT_VOICE_SEARCH_TRIGGERS = "hit search, search it";
+    public static final boolean DEFAULT_HISTORY_ENABLED = true;
 
     private static final ThreadLocal<Boolean> IN_GBOARD_PREFS_LOOKUP = new ThreadLocal<Boolean>();
     private static volatile GboardPrefsBridge cachedGboardBridge;
@@ -211,7 +238,8 @@ public final class RamblerEnhancementsSettings {
                 || PREF_KEY_APPEND_ONLY.equals(key)
                 || PREF_KEY_CURSOR_EDITING_ENABLED.equals(key)
                 || PREF_KEY_RESELECT_AFTER_EDIT.equals(key)
-                || PREF_KEY_APP_CONTEXT_ENABLED.equals(key);
+                || PREF_KEY_APP_CONTEXT_ENABLED.equals(key)
+                || PREF_KEY_AUTO_PARALLEL_RETRY.equals(key);
     }
 
     public static boolean readUseDictionaryWords(Context context) {
@@ -236,6 +264,64 @@ public final class RamblerEnhancementsSettings {
     public static boolean readAppContextEnabled(Context context) {
         return readLiveBoolean(
                 context, PREF_KEY_APP_CONTEXT_ENABLED, DEFAULT_APP_CONTEXT_ENABLED);
+    }
+
+    public static boolean readAutoParallelRetryEnabled(Context context) {
+        return readLiveBoolean(
+                context, PREF_KEY_AUTO_PARALLEL_RETRY, DEFAULT_AUTO_PARALLEL_RETRY);
+    }
+
+    public static int readMaxSessionSeconds(Context context) {
+        SharedPreferences prefs = preferencesOrNull(context);
+        if (prefs == null) {
+            return DEFAULT_MAX_SESSION_SECONDS;
+        }
+        try {
+            return normalizeMaxSessionSeconds(
+                    prefs.getInt(PREF_KEY_MAX_SESSION_SECONDS, DEFAULT_MAX_SESSION_SECONDS));
+        } catch (Throwable ignored) {
+            return DEFAULT_MAX_SESSION_SECONDS;
+        }
+    }
+
+    public static int normalizeMaxSessionSeconds(int seconds) {
+        if (seconds <= 0) {
+            return 0;
+        }
+        if (seconds < MIN_CUSTOM_SESSION_SECONDS) {
+            return MIN_CUSTOM_SESSION_SECONDS;
+        }
+        return Math.min(seconds, MAX_CUSTOM_SESSION_SECONDS);
+    }
+
+    public static boolean readStripTrailingPeriod(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_STRIP_TRAILING_PERIOD, DEFAULT_STRIP_TRAILING_PERIOD);
+    }
+
+    public static boolean readVoiceSendEnabled(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_VOICE_SEND_ENABLED, DEFAULT_VOICE_SEND_ENABLED);
+    }
+
+    public static String readVoiceSendTriggers(Context context) {
+        return readDedicatedString(
+                context, PREF_KEY_VOICE_SEND_TRIGGERS, DEFAULT_VOICE_SEND_TRIGGERS);
+    }
+
+    public static boolean readVoiceSearchEnabled(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_VOICE_SEARCH_ENABLED, DEFAULT_VOICE_SEARCH_ENABLED);
+    }
+
+    public static String readVoiceSearchTriggers(Context context) {
+        return readDedicatedString(
+                context, PREF_KEY_VOICE_SEARCH_TRIGGERS, DEFAULT_VOICE_SEARCH_TRIGGERS);
+    }
+
+    public static boolean readHistoryEnabled(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED);
     }
 
     public static boolean writeUseDictionaryWords(Context context, boolean enabled) {
@@ -271,6 +357,94 @@ public final class RamblerEnhancementsSettings {
         boolean ok = writeLiveBoolean(context, PREF_KEY_APP_CONTEXT_ENABLED, enabled);
         RamblerFlagRuntime.refreshLiveFlags();
         return ok;
+    }
+
+    public static boolean writeAutoParallelRetryEnabled(Context context, boolean enabled) {
+        RamblerFlagRuntime.seedApplicationContext(context);
+        boolean ok = writeLiveBoolean(context, PREF_KEY_AUTO_PARALLEL_RETRY, enabled);
+        RamblerFlagRuntime.refreshLiveFlags();
+        return ok;
+    }
+
+    public static boolean writeMaxSessionSeconds(Context context, int seconds) {
+        RamblerFlagRuntime.seedApplicationContext(context);
+        SharedPreferences prefs = preferencesOrNull(context);
+        if (prefs == null) {
+            return false;
+        }
+        boolean ok = prefs.edit()
+                .putInt(PREF_KEY_MAX_SESSION_SECONDS, normalizeMaxSessionSeconds(seconds))
+                .commit();
+        RamblerFlagRuntime.refreshLiveFlags();
+        return ok;
+    }
+
+    public static boolean writeStripTrailingPeriod(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_STRIP_TRAILING_PERIOD, enabled);
+    }
+
+    public static boolean writeVoiceSendEnabled(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_VOICE_SEND_ENABLED, enabled);
+    }
+
+    public static boolean writeVoiceSendTriggers(Context context, String triggers) {
+        String normalized = triggers == null ? "" : triggers.trim();
+        return writeDedicatedString(context, PREF_KEY_VOICE_SEND_TRIGGERS, normalized);
+    }
+
+    public static boolean writeVoiceSearchEnabled(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_VOICE_SEARCH_ENABLED, enabled);
+    }
+
+    public static boolean writeVoiceSearchTriggers(Context context, String triggers) {
+        String normalized = triggers == null ? "" : triggers.trim();
+        return writeDedicatedString(context, PREF_KEY_VOICE_SEARCH_TRIGGERS, normalized);
+    }
+
+    public static boolean writeHistoryEnabled(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_HISTORY_ENABLED, enabled);
+    }
+
+    private static boolean readDedicatedBoolean(Context context, String key, boolean fallback) {
+        SharedPreferences prefs = preferencesOrNull(context);
+        Boolean val = readBooleanOrNull(prefs, key);
+        return val != null ? val.booleanValue() : fallback;
+    }
+
+    private static boolean writeDedicatedBoolean(Context context, String key, boolean value) {
+        try {
+            SharedPreferences prefs = preferencesOrNull(context);
+            return prefs != null && prefs.edit().putBoolean(key, value).commit();
+        } catch (Throwable err) {
+            logWarningSafely("Failed to persist setting " + key, err);
+            return false;
+        }
+    }
+
+    private static String readDedicatedString(Context context, String key, String fallback) {
+        SharedPreferences prefs = preferencesOrNull(context);
+        if (prefs == null) {
+            return fallback;
+        }
+        try {
+            if (!prefs.contains(key)) {
+                return fallback;
+            }
+            String value = prefs.getString(key, fallback);
+            return value == null ? fallback : value;
+        } catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
+    private static boolean writeDedicatedString(Context context, String key, String value) {
+        try {
+            SharedPreferences prefs = preferencesOrNull(context);
+            return prefs != null && prefs.edit().putString(key, value == null ? "" : value).commit();
+        } catch (Throwable err) {
+            logWarningSafely("Failed to persist setting " + key, err);
+            return false;
+        }
     }
 
     public static Set<String> readSeededContacts(Context context) {

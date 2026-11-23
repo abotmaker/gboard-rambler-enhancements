@@ -11,6 +11,7 @@ object PatchCatalog {
         ramblerContactNamesPatch,
         ramblerCursorEditingPatch,
         ramblerAppContextPatch,
+        ramblerProductivityToolsPatch,
     )
 
     fun publishedInventory(version: String): String {

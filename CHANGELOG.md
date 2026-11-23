@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.8...v1.2.0) (2026-11-24)
+
+### ✨ New Features
+
+* **Rambler Productivity Tools** (new 7th patch, enabled by default):
+  * **Hands-Free Voice Send & Search Suffixes (opt-in):** Say a customizable end phrase (default: `"hit send"` / `"send it"` or `"hit search"` / `"search it"`) in one breath to strip the trigger, commit the clean message, and immediately trigger the field's Send or Search IME action. Strictly gated on `EditorInfo.imeOptions` (never triggers or strips in Notes, composers, or fields with `IME_FLAG_NO_ENTER_ACTION`).
+  * **Deterministic Voice Snippets:** Map spoken triggers (e.g. `"my email"`, `"calendar link"`) to exact literal expansions expanded client-side before commit so Rambler never misspells URLs, emails, handles, or templates.
+  * **Post-Dictation Find & Replace + Strip Trailing Period:** Define plain-text or regex replacements (optional case-sensitive and per-app scope) plus an optional **Strip trailing period** toggle for casual chat (preserving ellipses `…` and abbreviations like `e.g.` / `Dr.`).
+  * **Local Dictation History:** Private on-device ring buffer (last 50 committed Rambler dictations) with ON/OFF toggle, search filter, one-tap copy, single-entry delete, and Clear all.
+  * **Auto Parallel Retry on Flaky Networks:** Live toggle enabling Gboard's `agentic_dictation_enable_auto_parallel_retry` + `enable_pcm_audio_caching_for_offline_fallback` + `jetson_defer_error_propagation_on_network_failure` so transient Wi-Fi/5G drops silently replay buffered audio in parallel.
+  * **Longer Dictation Sessions:** Configurable `jetson_max_session_duration_seconds` (Default, 2–30 min presets, or custom 30–3600s) so long voice dumps aren't cut off early.
+  * **One-Tap Settings Backup & Restore (`.json`):** Export and import all Rambler Enhancements config (Hex waveform, per-app rules, snippets, find/replace rules, voice actions, behavior toggles, and `MUSE_STATS` voice dictionary words) as a single JSON file (excluding private dictation history).
+* **Per-App Behavior Overrides:** Extend Per-App rules with tri-state overrides (**Default / Force ON / Force OFF**) for **Append-only dictation**, **App context**, and **Strip trailing period** — refreshed live via `AgenticDictationExtension.onActivateInternal(EditorInfo)` before every dictation starts (supports behavior-only app rules without needing a custom prompt).
+
 ## [1.1.8](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.7...v1.1.8) (2026-11-23)
 
 ### 🐛 Bug Fixes

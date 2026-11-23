@@ -17,6 +17,7 @@ public final class RamblerDynamicConfig {
     public static boolean FEATURE_CONTACT_NAMES = false;
     public static boolean FEATURE_CURSOR_EDITING = false;
     public static boolean FEATURE_APP_CONTEXT = false;
+    public static boolean FEATURE_PRODUCTIVITY_TOOLS = false;
 
     // Flag class (oki in Gboard 18.5.4)
     public static String FLAG_NAME_FIELD = "a";
@@ -69,6 +70,10 @@ public final class RamblerDynamicConfig {
     // AgenticDictationExtension fields for per-app custom instructions (fhv in Gboard 18.5.4)
     public static String AGENTIC_CONTEXT_FIELD = "b";
     public static String AGENTIC_EDITOR_INFO_FIELD = "h";
+
+    // InputConnection wrapper interface methods (pcn in 18.5.4, aepw in 18.8.0)
+    public static String PCN_GET_EDITOR_INFO_METHOD = "k";
+    public static String PCN_PERFORM_ACTION_METHOD = "y";
 
     private RamblerDynamicConfig() {
     }
