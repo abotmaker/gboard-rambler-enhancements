@@ -1,9 +1,20 @@
 # Gboard Rambler Enhancements
 
-[![Add Source to Morphe](https://img.shields.io/badge/Morphe-Add%20Patch%20Source-4285F4?style=for-the-badge)](https://morphe.software/add-source?url=https://raw.githubusercontent.com/abotmaker/gboard-rambler-enhancements/main/patches-bundle.json)
+[![Add Source to Morphe](https://img.shields.io/badge/Morphe-Add%20Patch%20Source-4285F4?style=for-the-badge)](https://morphe.software/add-source?github=abotmaker/gboard-rambler-enhancements&name=Gboard%20Rambler%20Enhancements&app=com.google.android.inputmethod.latin&appName=Gboard)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
 
 Standalone [Morphe](https://morphe.software) patch pack for **Gboard Rambler** (Agentic Voice Typing), bringing **[Hex by Anomaly](https://github.com/anomalyco/hex)** waveform animations plus Rambler power-user enhancements — designed to patch cleanly **alongside upstream [GboardWu](https://github.com/jasonwu1994/Gboard-patches)** without conflicts.
+
+<p align="center">
+  <img src="assets/rambler-hex-waveforms-demo.gif" alt="Hex waveform animations demo" width="840" />
+</p>
+
+<details>
+  <summary>Preview: Exhaustive native <strong>Rambler voice typing</strong> settings screen</summary>
+  <p align="center">
+    <img src="assets/rambler-voice-typing-settings.png" alt="Exhaustive Rambler voice typing settings" width="360" />
+  </p>
+</details>
 
 ---
 
