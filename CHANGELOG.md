@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.6](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.5...v1.1.6) (2026-11-23)
+
+### ✨ Improvements
+
+* **Gboard:** Add a live **Re-select after edit** toggle (`jetson_reselect_after_edit`, **off by default**) in **Gboard Settings → Voice typing → Rambler voice typing → Dictation behavior** and **Rambler Enhancements**. Previously, editing highlighted text automatically kept the edited span selected, causing follow-up dictations to keep rewriting that selection instead of appending cleanly.
+
 ## [1.1.5](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.4...v1.1.5) (2026-11-23)
 
 ### 🐛 Bug Fixes

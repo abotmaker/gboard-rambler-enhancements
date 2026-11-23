@@ -396,6 +396,7 @@ internal const val CUSTOM_INSTRUCTION_PREF_KEY = "pref_key_rambler_custom_instru
 internal const val USE_DICTIONARY_WORDS_PREF_KEY = "pref_rambler_use_dictionary_words"
 internal const val APPEND_ONLY_PREF_KEY = "pref_rambler_append_only"
 internal const val CURSOR_EDITING_PREF_KEY = "pref_rambler_cursor_editing_enabled"
+internal const val RESELECT_AFTER_EDIT_PREF_KEY = "pref_rambler_reselect_after_edit"
 internal const val APP_CONTEXT_PREF_KEY = "pref_rambler_app_context_enabled"
 internal const val JETSON_VOICE_SETTINGS_XML = "res/xml/setting_jetson_voice.xml"
 
@@ -460,7 +461,10 @@ internal val ramblerSharedSettingsResourcePatch = resourcePatch(
                     "Insert new speech at the cursor without rewriting earlier text; selected text still edits normally",
                 "rambler_enh_pref_cursor_editing_title" to "Cursor-aware editing",
                 "rambler_enh_pref_cursor_editing_summary" to
-                    "Send text after the cursor, scope spoken edits to selections, and re-select edited text",
+                    "Send text after the cursor and scope spoken edits to selected text",
+                "rambler_enh_pref_reselect_after_edit_title" to "Re-select after edit",
+                "rambler_enh_pref_reselect_after_edit_summary" to
+                    "Keep edited text highlighted for chained voice edits (off by default so follow-up dictations append cleanly)",
                 "rambler_enh_pref_app_context_title" to "App context",
                 "rambler_enh_pref_app_context_summary" to
                     "Share active app name, input type, and field hint so Rambler adapts formatting",
@@ -565,7 +569,9 @@ private fun zhHantSettingsStrings(): List<Pair<String, String>> = listOf(
     "rambler_enh_pref_append_only_title" to "僅附加模式（不重寫前文）",
     "rambler_enh_pref_append_only_summary" to "在游標處插入新語音而不重寫先前文字；有選取文字時仍可正常語音編輯",
     "rambler_enh_pref_cursor_editing_title" to "游標感知編輯",
-    "rambler_enh_pref_cursor_editing_summary" to "傳送游標後的文字、僅編輯選取範圍，並在編輯後重新選取文字",
+    "rambler_enh_pref_cursor_editing_summary" to "傳送游標後的文字，並僅針對選取範圍套用語音編輯",
+    "rambler_enh_pref_reselect_after_edit_title" to "編輯後重新選取文字",
+    "rambler_enh_pref_reselect_after_edit_summary" to "語音編輯後保持選取以便連續修改（預設關閉，讓後續語音可順利附加）",
     "rambler_enh_pref_app_context_title" to "應用程式情境",
     "rambler_enh_pref_app_context_summary" to "傳送目前應用程式名稱與輸入欄位提示，讓 Rambler 依情境調整格式",
 )
@@ -721,6 +727,12 @@ internal fun injectExhaustiveJetsonVoicePreferences(
                 defaultValue = true,
                 titleRes = "@string/rambler_enh_pref_cursor_editing_title",
                 summaryRes = "@string/rambler_enh_pref_cursor_editing_summary",
+            )?.let(rows::add)
+            switchPreference(
+                key = RESELECT_AFTER_EDIT_PREF_KEY,
+                defaultValue = false,
+                titleRes = "@string/rambler_enh_pref_reselect_after_edit_title",
+                summaryRes = "@string/rambler_enh_pref_reselect_after_edit_summary",
             )?.let(rows::add)
         }
         if (RamblerFeature.APP_CONTEXT in selected) {

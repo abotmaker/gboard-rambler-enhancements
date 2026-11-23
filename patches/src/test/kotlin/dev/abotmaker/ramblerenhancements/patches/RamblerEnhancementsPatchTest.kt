@@ -88,7 +88,7 @@ class RamblerEnhancementsPatchTest {
             topChildren.last().childElements("Preference").single().androidAttr("key"),
         )
         assertEquals(1, screen.getElementsByTagName("EditTextPreference").length)
-        assertEquals(4, screen.getElementsByTagName("SwitchPreferenceCompat").length)
+        assertEquals(5, screen.getElementsByTagName("SwitchPreferenceCompat").length)
         val switchKeys = (0 until screen.getElementsByTagName("SwitchPreferenceCompat").length).map { idx ->
             (screen.getElementsByTagName("SwitchPreferenceCompat").item(idx) as org.w3c.dom.Element)
                 .androidAttr("key")
@@ -98,6 +98,7 @@ class RamblerEnhancementsPatchTest {
                 USE_DICTIONARY_WORDS_PREF_KEY,
                 APPEND_ONLY_PREF_KEY,
                 CURSOR_EDITING_PREF_KEY,
+                RESELECT_AFTER_EDIT_PREF_KEY,
                 APP_CONTEXT_PREF_KEY,
             ),
             switchKeys,

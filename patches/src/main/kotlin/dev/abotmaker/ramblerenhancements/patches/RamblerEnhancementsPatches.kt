@@ -137,7 +137,7 @@ val ramblerContactNamesPatch = bytecodePatch(
 @Suppress("unused")
 val ramblerCursorEditingPatch = bytecodePatch(
     name = "Rambler Cursor-Aware Editing",
-    description = "Enables cursor-aware editing, selected-text-only spoken edits, post-edit reselection (credited to nl-morphe-patches), and a live Append-only dictation toggle with clean cursor-boundary spacing. $VERSION_NOTE",
+    description = "Enables cursor-aware editing, selected-text-only spoken edits, optional post-edit reselection (off by default, credited to nl-morphe-patches), and a live Append-only dictation toggle with clean cursor-boundary spacing. $VERSION_NOTE",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD)

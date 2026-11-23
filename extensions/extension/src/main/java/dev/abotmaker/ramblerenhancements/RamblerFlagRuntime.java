@@ -58,6 +58,7 @@ public final class RamblerFlagRuntime {
     private static volatile Boolean useDictionaryWordsOverrideForTesting;
     private static volatile Boolean appendOnlyOverrideForTesting;
     private static volatile Boolean cursorEditingOverrideForTesting;
+    private static volatile Boolean reselectAfterEditOverrideForTesting;
     private static volatile Boolean appContextOverrideForTesting;
 
     private RamblerFlagRuntime() {
@@ -148,6 +149,10 @@ public final class RamblerFlagRuntime {
         cursorEditingOverrideForTesting = enabled;
     }
 
+    static void setReselectAfterEditOverrideForTesting(Boolean enabled) {
+        reselectAfterEditOverrideForTesting = enabled;
+    }
+
     static void setAppContextOverrideForTesting(Boolean enabled) {
         appContextOverrideForTesting = enabled;
     }
@@ -156,6 +161,7 @@ public final class RamblerFlagRuntime {
         useDictionaryWordsOverrideForTesting = null;
         appendOnlyOverrideForTesting = null;
         cursorEditingOverrideForTesting = null;
+        reselectAfterEditOverrideForTesting = null;
         appContextOverrideForTesting = null;
         applicationContext = null;
         cachedHandles = null;
@@ -200,6 +206,17 @@ public final class RamblerFlagRuntime {
             return override.booleanValue();
         }
         return RamblerEnhancementsSettings.readCursorEditingEnabled(resolveContext());
+    }
+
+    public static boolean isReselectAfterEditEnabled() {
+        if (!RamblerDynamicConfig.FEATURE_CURSOR_EDITING) {
+            return false;
+        }
+        Boolean override = reselectAfterEditOverrideForTesting;
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return RamblerEnhancementsSettings.readReselectAfterEditEnabled(resolveContext());
     }
 
     public static boolean isAppContextEnabled() {
@@ -278,7 +295,6 @@ public final class RamblerFlagRuntime {
                 return isCursorEditingEnabled() ? enableBoolean(rawValue) : rawValue;
 
             case SELECTED_TEXT_ONLY_FLAG:
-            case RESELECT_AFTER_EDIT_FLAG:
                 if (!RamblerDynamicConfig.FEATURE_CURSOR_EDITING) {
                     return rawValue;
                 }
@@ -286,6 +302,18 @@ public final class RamblerFlagRuntime {
                 return (isCursorEditingEnabled() || isAppendOnlyEnabled())
                         ? enableBoolean(rawValue)
                         : rawValue;
+
+            case RESELECT_AFTER_EDIT_FLAG:
+                if (!RamblerDynamicConfig.FEATURE_CURSOR_EDITING) {
+                    return rawValue;
+                }
+                rememberLiveFlag(flagInstance, flagName);
+                if (rawValue instanceof Boolean) {
+                    return Boolean.valueOf(
+                            isReselectAfterEditEnabled()
+                                    && (isCursorEditingEnabled() || isAppendOnlyEnabled()));
+                }
+                return rawValue;
 
             case APP_CONTEXT_FLAG:
                 if (!RamblerDynamicConfig.FEATURE_APP_CONTEXT) {

@@ -609,6 +609,14 @@ public final class RamblerEnhancementsActivity extends Activity {
                         RamblerEnhancementsSettings.writeCursorEditingEnabled(this, checked);
                         refreshUi();
                     });
+            addToggleRow(
+                    "Re-select after edit",
+                    "Keep edited text highlighted for chained voice edits (off by default so follow-up dictations append cleanly instead of rewriting the previous edit).",
+                    RamblerEnhancementsSettings.readReselectAfterEditEnabled(this),
+                    checked -> {
+                        RamblerEnhancementsSettings.writeReselectAfterEditEnabled(this, checked);
+                        refreshUi();
+                    });
         }
         if (RamblerDynamicConfig.FEATURE_APP_CONTEXT) {
             addToggleRow(

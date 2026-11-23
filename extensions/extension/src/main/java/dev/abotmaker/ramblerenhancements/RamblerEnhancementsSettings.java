@@ -31,6 +31,8 @@ public final class RamblerEnhancementsSettings {
     public static final String PREF_KEY_APPEND_ONLY = "pref_rambler_append_only";
     public static final String PREF_KEY_CURSOR_EDITING_ENABLED =
             "pref_rambler_cursor_editing_enabled";
+    public static final String PREF_KEY_RESELECT_AFTER_EDIT =
+            "pref_rambler_reselect_after_edit";
     public static final String PREF_KEY_APP_CONTEXT_ENABLED =
             "pref_rambler_app_context_enabled";
     public static final String PREF_KEY_SEEDED_CONTACTS =
@@ -40,12 +42,14 @@ public final class RamblerEnhancementsSettings {
             PREF_KEY_USE_DICTIONARY_WORDS,
             PREF_KEY_APPEND_ONLY,
             PREF_KEY_CURSOR_EDITING_ENABLED,
+            PREF_KEY_RESELECT_AFTER_EDIT,
             PREF_KEY_APP_CONTEXT_ENABLED
     };
 
     public static final boolean DEFAULT_USE_DICTIONARY_WORDS = true;
     public static final boolean DEFAULT_APPEND_ONLY = false;
     public static final boolean DEFAULT_CURSOR_EDITING_ENABLED = true;
+    public static final boolean DEFAULT_RESELECT_AFTER_EDIT = false;
     public static final boolean DEFAULT_APP_CONTEXT_ENABLED = true;
 
     private static final ThreadLocal<Boolean> IN_GBOARD_PREFS_LOOKUP = new ThreadLocal<Boolean>();
@@ -206,6 +210,7 @@ public final class RamblerEnhancementsSettings {
         return PREF_KEY_USE_DICTIONARY_WORDS.equals(key)
                 || PREF_KEY_APPEND_ONLY.equals(key)
                 || PREF_KEY_CURSOR_EDITING_ENABLED.equals(key)
+                || PREF_KEY_RESELECT_AFTER_EDIT.equals(key)
                 || PREF_KEY_APP_CONTEXT_ENABLED.equals(key);
     }
 
@@ -221,6 +226,11 @@ public final class RamblerEnhancementsSettings {
     public static boolean readCursorEditingEnabled(Context context) {
         return readLiveBoolean(
                 context, PREF_KEY_CURSOR_EDITING_ENABLED, DEFAULT_CURSOR_EDITING_ENABLED);
+    }
+
+    public static boolean readReselectAfterEditEnabled(Context context) {
+        return readLiveBoolean(
+                context, PREF_KEY_RESELECT_AFTER_EDIT, DEFAULT_RESELECT_AFTER_EDIT);
     }
 
     public static boolean readAppContextEnabled(Context context) {
@@ -245,6 +255,13 @@ public final class RamblerEnhancementsSettings {
     public static boolean writeCursorEditingEnabled(Context context, boolean enabled) {
         RamblerFlagRuntime.seedApplicationContext(context);
         boolean ok = writeLiveBoolean(context, PREF_KEY_CURSOR_EDITING_ENABLED, enabled);
+        RamblerFlagRuntime.refreshLiveFlags();
+        return ok;
+    }
+
+    public static boolean writeReselectAfterEditEnabled(Context context, boolean enabled) {
+        RamblerFlagRuntime.seedApplicationContext(context);
+        boolean ok = writeLiveBoolean(context, PREF_KEY_RESELECT_AFTER_EDIT, enabled);
         RamblerFlagRuntime.refreshLiveFlags();
         return ok;
     }

@@ -326,16 +326,30 @@ public final class RamblerEnhancementsTest {
 
             FakeOkiFlag surroundingLimit = new FakeOkiFlag(
                     RamblerFlagRuntime.SURROUNDING_TEXT_LIMIT_FLAG, Long.valueOf(2000L));
+            FakeOkiFlag reselectAfterEdit = new FakeOkiFlag(
+                    RamblerFlagRuntime.RESELECT_AFTER_EDIT_FLAG, Boolean.FALSE);
             FakeOkiFlag appContext = new FakeOkiFlag(
                     RamblerFlagRuntime.APP_CONTEXT_FLAG, Boolean.FALSE);
 
             RamblerFlagRuntime.seedAndRefreshIfNeeded(context);
             assertTrue(surroundingLimit.recompute());
             assertEquals(Long.valueOf(0L), surroundingLimit.resolved);
+            assertFalse(reselectAfterEdit.recompute());
+            assertEquals(Boolean.FALSE, reselectAfterEdit.resolved);
             assertFalse(appContext.recompute());
             assertEquals(Boolean.FALSE, appContext.resolved);
 
             // Live flip inside Gboard's native qvt store triggers immediate flag refresh!
+            FakeGboardPrefs.instance.putBoolean(
+                    RamblerEnhancementsSettings.PREF_KEY_RESELECT_AFTER_EDIT, true);
+            assertEquals(Boolean.TRUE, reselectAfterEdit.resolved);
+            assertEquals(1, reselectAfterEdit.notifyCount);
+
+            FakeGboardPrefs.instance.putBoolean(
+                    RamblerEnhancementsSettings.PREF_KEY_RESELECT_AFTER_EDIT, false);
+            assertEquals(Boolean.FALSE, reselectAfterEdit.resolved);
+            assertEquals(2, reselectAfterEdit.notifyCount);
+
             FakeGboardPrefs.instance.putBoolean(
                     RamblerEnhancementsSettings.PREF_KEY_APP_CONTEXT_ENABLED, true);
             assertEquals(Boolean.TRUE, appContext.resolved);

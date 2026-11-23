@@ -1,5 +1,5 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.6",
   "patches": [
     {
       "name": "Rambler App Context",
@@ -31,7 +31,7 @@
     },
     {
       "name": "Rambler Cursor-Aware Editing",
-      "description": "Enables cursor-aware editing, selected-text-only spoken edits, post-edit reselection (credited to nl-morphe-patches), and a live Append-only dictation toggle with clean cursor-boundary spacing. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "description": "Enables cursor-aware editing, selected-text-only spoken edits, optional post-edit reselection (off by default, credited to nl-morphe-patches), and a live Append-only dictation toggle with clean cursor-boundary spacing. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
       "use": true,
       "dependencies": [],
       "compatiblePackages": {
