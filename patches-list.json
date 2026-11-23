@@ -1,0 +1,73 @@
+{
+  "version": "1.0.0",
+  "patches": [
+    {
+      "name": "Rambler App Context",
+      "description": "Enables sharing the active app name, input type, and field hint with Gboard Rambler (credited to nl-morphe-patches) with a live toggle in Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.google.android.inputmethod.latin": null,
+        "dev.jason.com.google.android.inputmethod.latin": null
+      },
+      "options": []
+    },
+    {
+      "name": "Rambler Contact Names",
+      "description": "Seeds up to 1,000 phone contact names into Rambler\u0027s MUSE_STATS voice dictionary (credited to nl-morphe-patches) when Contacts permission is granted, plus manual sync and reset controls. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "use": true,
+      "dependencies": [
+        "Rambler Personal Dictionary"
+      ],
+      "compatiblePackages": {
+        "com.google.android.inputmethod.latin": null,
+        "dev.jason.com.google.android.inputmethod.latin": null
+      },
+      "options": []
+    },
+    {
+      "name": "Rambler Cursor-Aware Editing",
+      "description": "Enables cursor-aware editing, selected-text-only spoken edits, post-edit reselection (credited to nl-morphe-patches), and a live Append-only dictation toggle with clean cursor-boundary spacing. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.google.android.inputmethod.latin": null,
+        "dev.jason.com.google.android.inputmethod.latin": null
+      },
+      "options": []
+    },
+    {
+      "name": "Rambler Custom Instructions",
+      "description": "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -\u003e Voice typing -\u003e Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.google.android.inputmethod.latin": null,
+        "dev.jason.com.google.android.inputmethod.latin": null
+      },
+      "options": []
+    },
+    {
+      "name": "Rambler Personal Dictionary",
+      "description": "Enables Gboard Rambler\u0027s UserFeatureCache MUSE_STATS personal voice dictionary (credited to nl-morphe-patches) with add, import/export (.txt), remove, and clear controls in Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.google.android.inputmethod.latin": null,
+        "dev.jason.com.google.android.inputmethod.latin": null
+      },
+      "options": []
+    },
+    {
+      "name": "Rambler Waveform Animation",
+      "description": "Replaces Gboard Rambler\u0027s light bar with Hex by Anomaly\u0027s animations. Listening (while you speak): Hex Dot Scope (braided dot oscilloscope), Hex Android Wave (7-row scrolling sine wave), or Gboard Default. Processing (after you stop speaking while transcribing): Flow, Pulse, or Sweep. Includes independent Listening/Processing colors and minimal Hex tuning (Strip trace vs iOS halo, dot spacing, glow, voice response). Works alongside upstream GboardWu (requires Advanced Voice Typing in GboardWu). Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.google.android.inputmethod.latin": null,
+        "dev.jason.com.google.android.inputmethod.latin": null
+      },
+      "options": []
+    }
+  ]
+}
