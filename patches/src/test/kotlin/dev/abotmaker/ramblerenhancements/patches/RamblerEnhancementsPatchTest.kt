@@ -124,6 +124,21 @@ class RamblerEnhancementsPatchTest {
         assertEquals(1, voiceScreen.getElementsByTagName("Preference").length)
     }
 
+    @Test
+    fun patchesBundleJsonMatchesMorpheLocalDateTimeSchema() {
+        val bundleFile = listOf(
+            java.io.File("patches-bundle.json"),
+            java.io.File("../patches-bundle.json"),
+        ).first { it.isFile }
+        val json = com.google.gson.JsonParser.parseString(bundleFile.readText()).asJsonObject
+        val createdAt = json.get("created_at").asString
+        // Morphe Manager deserializes created_at via java.time.LocalDateTime.parse (no 'Z' or offset!).
+        val parsed = java.time.LocalDateTime.parse(createdAt)
+        assertTrue(parsed.year >= 2026)
+        assertTrue(json.get("download_url").asString.endsWith(".mpp"))
+        assertTrue(json.get("version").asString.isNotBlank())
+    }
+
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
     }.newDocumentBuilder().parse(InputSource(StringReader(xml)))

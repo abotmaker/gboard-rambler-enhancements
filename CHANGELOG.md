@@ -1,29 +1,26 @@
 # Changelog
 
-## v1.1.0
+## [1.1.0](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.0.0...v1.1.0) (2026-11-23)
 
-- **Exhaustive native "Rambler voice typing" settings page (`Gboard Settings → Voice typing → Rambler`):**
-  - Every selected Rambler patch now appears directly inside Gboard's own **Rambler voice typing** settings screen in native Material You style (showing only controls for patches selected in Morphe):
-    - **Custom instructions** (inline dialog editor)
-    - **Waveform** → **Waveform animation (Hex)** (opens directly to Listening/Processing style, colors, and Hex tuning)
-    - **Voice dictionary & contacts** → **Use dictionary words** live native switch (toggles `enable_user_contact_biasing` without restarting), **Manage voice dictionary** (opens directly to MUSE_STATS Add / Import `.txt` / Export `.txt` / Remove / Clear), and **Contact names sync** (opens directly to Contacts permission / Sync now / Reset history)
-    - **Dictation behavior** → live native switches right on the page for **Append-only dictation**, **Cursor-aware editing**, and **App context** (synced live with **Voice typing → Rambler Enhancements**).
+### ✨ New Features
 
-## v1.0.0
+* **Rambler voice typing settings:** Expose every selected patch directly inside Gboard's native **Settings → Voice typing → Rambler voice typing** screen in Material You style:
+  * **Custom instructions** — inline dialog editor.
+  * **Waveform** → **Waveform animation (Hex)** — jumps directly to Listening/Processing animations, colors, and Hex tuning.
+  * **Voice dictionary & contacts** → live **Use dictionary words** switch (`enable_user_contact_biasing`), **Manage voice dictionary** (`MUSE_STATS` Add / Import `.txt` / Export `.txt` / Remove / Clear), and **Contact names sync**.
+  * **Dictation behavior** → live native switches right on the page for **Append-only dictation**, **Cursor-aware editing**, and **App context** (synced live with **Voice typing → Rambler Enhancements**).
 
-Initial standalone release of **Gboard Rambler Enhancements** for Morphe:
+## [1.0.0](https://github.com/abotmaker/gboard-rambler-enhancements/releases/tag/v1.0.0) (2026-11-23)
 
-- **Rambler Waveform Animation (Hex)**:
-  - **Listening animations** (plays while you speak): **Hex Dot Scope** (braided dual-trace dot oscilloscope with phosphor trails), **Hex Android Wave** (7-row scrolling dot sine wave), or **Gboard Default**.
-  - **Processing animations** (plays briefly after you stop speaking while Rambler transcribes): **Flow**, **Pulse**, or **Sweep**.
-  - Independent **Listening color** and **Processing color** palettes + custom HSV/Hex picker.
-  - Bare-minimum **Hex tuning**: Glow style (**Strip trace** vs **iOS halo**), dot spacing, glow strength, and voice response.
-- **Rambler Custom Instructions**: enables `agentic_dictation_enable_custom_instruction` and adds custom instruction editing to both Gboard's Rambler settings and the unified **Rambler Enhancements** screen.
-- **Rambler Personal Dictionary (`MUSE_STATS`)**: enables `UserFeatureCache` biasing words with add, `.txt` import/export, remove, and clear controls.
-- **Rambler Contact Names**: seeds up to 1,000 phone contact names into `MUSE_STATS` with manual sync and history reset.
-- **Rambler Cursor-Aware Editing**: enables cursor-aware editing, selected-text-only spoken edits, post-edit reselection, and a live **Append-only dictation** toggle with clean cursor-boundary spacing.
-- **Rambler App Context**: enables sending active app/field metadata so Rambler matches app context.
-- **Zero-conflict architecture alongside upstream GboardWu**:
-  - Hooks Gboard's internal flag resolution (`oki.x()`) rather than `oki.g()`, so GboardWu's flag composer never conflicts.
-  - Hooks `AgenticDictationExtension.<init>` rather than `hU()`, so GboardWu's Rambler selector never conflicts.
-  - Uses dynamic bytecode fingerprinting (no pinned version restriction) — **verified on Gboard `18.5.4.993608717-release-arm64-v8a`**; other/newer versions are unverified.
+### ✨ New Features
+
+* **Rambler Waveform Animation (Hex):** Ported from [Hex by Anomaly](https://github.com/anomalyco/hex) (MIT):
+  * **Listening** *(while you speak)*: **Hex Dot Scope** (braided dual-trace dot oscilloscope with phosphor trails), **Hex Android Wave** (7-row scrolling dot sine wave), or **Gboard Default**.
+  * **Processing** *(after you stop speaking, while transcribing)*: **Flow**, **Pulse**, or **Sweep**.
+  * Independent **Listening** & **Processing** colors + minimal **Hex tuning** (**Strip trace** vs **iOS halo**, dot spacing, glow strength, voice response).
+* **Rambler Custom Instructions:** Enables `agentic_dictation_enable_custom_instruction` and persistent custom style/formatting rules.
+* **Rambler Personal Dictionary (`MUSE_STATS`):** Enables `UserFeatureCache` biasing words with add, `.txt` import/export, remove, and clear controls.
+* **Rambler Contact Names:** Seeds up to 1,000 phone contact names into `MUSE_STATS` with manual sync and history reset.
+* **Rambler Cursor-Aware Editing:** Enables cursor-aware editing, selected-text-only spoken edits, post-edit reselection, and a live **Append-only dictation** toggle with clean cursor-boundary spacing.
+* **Rambler App Context:** Enables sharing active app/field metadata with a live toggle.
+* **GboardWu coexistence:** Conflict-free hooks (`oki.x()` and `AgenticDictationExtension.<init>`) with dynamic bytecode fingerprinting — verified on Gboard `18.5.4.993608717-release-arm64-v8a`; newer versions are unverified.
