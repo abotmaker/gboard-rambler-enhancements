@@ -20,7 +20,12 @@ Standalone [Morphe](https://morphe.software) patch pack for **Gboard Rambler** (
 
 ## Included Patches
 
-All 6 patches live in **Gboard Settings → Voice typing → Rambler Enhancements** (and inside **Voice typing → Rambler**). Only sections for the patches you selected in Morphe are shown.
+All 6 patches appear **directly inside Gboard Settings → Voice typing → Rambler voice typing** in native Material You style (as well as in the unified **Voice typing → Rambler Enhancements** screen). Only controls for the patches you selected in Morphe are shown:
+
+- **Custom instructions** — inline editor
+- **Waveform** — **Waveform animation (Hex)** (jumps straight into Listening/Processing style, colors, and Hex tuning)
+- **Voice dictionary & contacts** — live **Use dictionary words** switch + **Manage voice dictionary (MUSE_STATS)** + **Contact names sync** (alongside stock *Rambler dictionary* and *Clear all corrected words*)
+- **Dictation behavior** — live switches right on the page for **Append-only dictation**, **Cursor-aware editing**, and **App context**
 
 1. **`Rambler Waveform Animation`** *(ported from [Hex by Anomaly](https://github.com/anomalyco/hex))*
    - Replaces Rambler's header light bar with Hex's **Listening** and **Processing** animations, independent colors, and minimal tuning (**Strip trace** vs **iOS halo**, dot spacing, glow strength, voice response).

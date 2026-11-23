@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.0
+
+- **Exhaustive native "Rambler voice typing" settings page (`Gboard Settings → Voice typing → Rambler`):**
+  - Every selected Rambler patch now appears directly inside Gboard's own **Rambler voice typing** settings screen in native Material You style (showing only controls for patches selected in Morphe):
+    - **Custom instructions** (inline dialog editor)
+    - **Waveform** → **Waveform animation (Hex)** (opens directly to Listening/Processing style, colors, and Hex tuning)
+    - **Voice dictionary & contacts** → **Use dictionary words** live native switch (toggles `enable_user_contact_biasing` without restarting), **Manage voice dictionary** (opens directly to MUSE_STATS Add / Import `.txt` / Export `.txt` / Remove / Clear), and **Contact names sync** (opens directly to Contacts permission / Sync now / Reset history)
+    - **Dictation behavior** → live native switches right on the page for **Append-only dictation**, **Cursor-aware editing**, and **App context** (synced live with **Voice typing → Rambler Enhancements**).
+
 ## v1.0.0
 
 Initial standalone release of **Gboard Rambler Enhancements** for Morphe:

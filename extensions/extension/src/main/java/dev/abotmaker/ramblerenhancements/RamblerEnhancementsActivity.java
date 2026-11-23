@@ -105,17 +105,25 @@ public final class RamblerEnhancementsActivity extends Activity {
             "Emerald", "Violet", "Amber", "Cyan", "White", "Custom"
     };
 
+    public static final String EXTRA_SECTION = "section";
+    public static final String SECTION_WAVEFORM = "waveform";
+    public static final String SECTION_DICTIONARY = "dictionary";
+    public static final String SECTION_CONTACTS = "contacts";
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private LinearLayout contentContainer;
     private HexDotScopeSimulation.Stage previewStage = HexDotScopeSimulation.Stage.RECORDING;
     private String pendingExportPayload;
+    private String activeSection;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         RamblerFlagRuntime.seedAndRefreshIfNeeded(this);
         RamblerWaveformRuntime.seedApplicationContext(this);
-        setTitle("Rambler Enhancements");
+        Intent launchIntent = getIntent();
+        activeSection = launchIntent == null ? null : launchIntent.getStringExtra(EXTRA_SECTION);
+        setTitle(titleForSection(activeSection));
         ActionBar actionBar = getActionBar();
         if (actionBar != null) {
             actionBar.setDisplayHomeAsUpEnabled(true);
@@ -207,25 +215,43 @@ public final class RamblerEnhancementsActivity extends Activity {
         }
     }
 
+    private static String titleForSection(String section) {
+        if (SECTION_WAVEFORM.equals(section)) {
+            return "Waveform animation (Hex)";
+        }
+        if (SECTION_DICTIONARY.equals(section)) {
+            return "Rambler voice dictionary";
+        }
+        if (SECTION_CONTACTS.equals(section)) {
+            return "Contact names sync";
+        }
+        return "Rambler Enhancements";
+    }
+
+    private boolean showSection(String sectionName) {
+        return activeSection == null || activeSection.isEmpty() || sectionName.equals(activeSection);
+    }
+
     private void refreshUi() {
         if (contentContainer == null) {
             return;
         }
         contentContainer.removeAllViews();
 
-        if (RamblerDynamicConfig.FEATURE_WAVEFORM) {
+        if (RamblerDynamicConfig.FEATURE_WAVEFORM && showSection(SECTION_WAVEFORM)) {
             buildWaveformSection();
         }
-        if (RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS) {
+        if (RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS && showSection("custom_instructions")) {
             buildCustomInstructionsSection();
         }
-        if (RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY) {
+        if (RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY && showSection(SECTION_DICTIONARY)) {
             buildPersonalDictionarySection();
         }
-        if (RamblerDynamicConfig.FEATURE_CONTACT_NAMES) {
+        if (RamblerDynamicConfig.FEATURE_CONTACT_NAMES && showSection(SECTION_CONTACTS)) {
             buildContactsSection();
         }
-        if (RamblerDynamicConfig.FEATURE_CURSOR_EDITING || RamblerDynamicConfig.FEATURE_APP_CONTEXT) {
+        if ((RamblerDynamicConfig.FEATURE_CURSOR_EDITING || RamblerDynamicConfig.FEATURE_APP_CONTEXT)
+                && showSection("behavior")) {
             buildDictationBehaviorSection();
         }
 
@@ -412,6 +438,14 @@ public final class RamblerEnhancementsActivity extends Activity {
 
     private void buildPersonalDictionarySection() {
         addSectionHeader("Voice dictionary (MUSE_STATS)");
+        addToggleRow(
+                "Use dictionary words",
+                "Send stored MUSE_STATS biasing words with every Rambler dictation.",
+                RamblerEnhancementsSettings.readUseDictionaryWords(this),
+                checked -> {
+                    RamblerEnhancementsSettings.writeUseDictionaryWords(this, checked);
+                    refreshUi();
+                });
         List<String> storedWords = RamblerMuseStatsBridge.readWords(this);
         addRow(
                 "Stored words",

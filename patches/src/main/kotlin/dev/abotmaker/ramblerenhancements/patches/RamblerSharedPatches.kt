@@ -6,6 +6,7 @@ import app.morphe.patcher.patch.AppTarget
 import app.morphe.patcher.patch.BytecodePatchContext
 import app.morphe.patcher.patch.Compatibility
 import app.morphe.patcher.patch.PatchException
+import app.morphe.patcher.patch.ResourcePatchContext
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.util.proxy.mutableTypes.MutableClass
@@ -116,7 +117,8 @@ internal val ramblerSharedExtensionPatch = bytecodePatch(
         }
 
         val needsAgenticCtorHook =
-            RamblerFeature.CONTACT_NAMES in state.selectedFeatures ||
+            RamblerFeature.PERSONAL_DICTIONARY in state.selectedFeatures ||
+                RamblerFeature.CONTACT_NAMES in state.selectedFeatures ||
                 RamblerFeature.CURSOR_EDITING in state.selectedFeatures ||
                 RamblerFeature.APP_CONTEXT in state.selectedFeatures
         if (needsAgenticCtorHook && !state.agenticCtorHooked) {
@@ -288,50 +290,108 @@ internal fun MutableClass.addHelperMethodIfMissing(
     methods.add(method)
 }
 
+internal const val CUSTOM_INSTRUCTION_PREF_KEY = "pref_key_rambler_custom_instruction"
+internal const val USE_DICTIONARY_WORDS_PREF_KEY = "pref_rambler_use_dictionary_words"
+internal const val APPEND_ONLY_PREF_KEY = "pref_rambler_append_only"
+internal const val CURSOR_EDITING_PREF_KEY = "pref_rambler_cursor_editing_enabled"
+internal const val APP_CONTEXT_PREF_KEY = "pref_rambler_app_context_enabled"
+internal const val JETSON_VOICE_SETTINGS_XML = "res/xml/setting_jetson_voice.xml"
+
+internal object RamblerResourceStateStore {
+    private val byContext = WeakHashMap<ResourcePatchContext, LinkedHashSet<RamblerFeature>>()
+
+    @Synchronized
+    fun markSelected(context: ResourcePatchContext, feature: RamblerFeature) {
+        byContext.getOrPut(context) { linkedSetOf() }.add(feature)
+    }
+
+    @Synchronized
+    fun takeSelected(context: ResourcePatchContext): Set<RamblerFeature> =
+        byContext.remove(context) ?: emptySet()
+}
+
 internal val ramblerSharedSettingsResourcePatch = resourcePatch(
-    description = "Register standalone Rambler Enhancements settings Activity and inject Voice typing settings entry.",
+    description = "Register standalone Rambler Enhancements settings Activity and inject exhaustive Rambler voice typing & Voice typing settings controls.",
 ) {
     compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
 
-    execute {
+    execute { }
+
+    finalize {
+        val selected = RamblerResourceStateStore.takeSelected(this)
+        if (selected.isEmpty()) return@finalize
+
         // 1. Register Activity in AndroidManifest.xml with exported=false + internal action
         //    so Android resolves it inside this exact Gboard/GboardWu package even after Package Rename.
         document("AndroidManifest.xml").use { manifestDoc ->
             registerSettingsActivity(manifestDoc)
         }
 
-        // 2. Add settings entry strings (English + Traditional Chinese if present)
-        val entryStrings = mapOf(
-            "values" to (
-                "Rambler Enhancements" to
-                    "Hex waveform animations, custom instructions, voice dictionary, contacts, and dictation behavior"
+        // 2. Add settings strings (English + Traditional Chinese if present)
+        val stringsByFolder = mapOf(
+            "values" to listOf(
+                "rambler_enhancements_entry_title" to "Rambler Enhancements",
+                "rambler_enhancements_entry_summary" to
+                    "Hex waveform animations, custom instructions, voice dictionary, contacts, and dictation behavior",
+                "rambler_enh_custom_instruction_title" to "Custom instructions",
+                "rambler_enh_custom_instruction_summary" to
+                    "Style rules Rambler applies to everything you dictate, such as spelling, punctuation, or tone",
+                "rambler_enh_custom_instruction_hint" to
+                    "Added to Rambler instructions. For example: Write every number in digits.",
+                "rambler_enh_cat_waveform" to "Waveform",
+                "rambler_enh_pref_waveform_title" to "Waveform animation (Hex)",
+                "rambler_enh_pref_waveform_summary" to
+                    "Listening & processing animations, colors, and Hex tuning",
+                "rambler_enh_cat_dictionary_contacts" to "Voice dictionary & contacts",
+                "rambler_enh_pref_use_dict_title" to "Use dictionary words",
+                "rambler_enh_pref_use_dict_summary" to
+                    "Send your saved voice dictionary words with every Rambler request",
+                "rambler_enh_pref_manage_dict_title" to "Manage voice dictionary",
+                "rambler_enh_pref_manage_dict_summary" to
+                    "Add, import (.txt), export, remove, or clear MUSE_STATS biasing words",
+                "rambler_enh_pref_contacts_title" to "Contact names sync",
+                "rambler_enh_pref_contacts_summary" to
+                    "Seed phone contact names into Rambler's voice dictionary",
+                "rambler_enh_cat_behavior" to "Dictation behavior",
+                "rambler_enh_pref_append_only_title" to "Append-only dictation",
+                "rambler_enh_pref_append_only_summary" to
+                    "Insert new speech at the cursor without rewriting earlier text; selected text still edits normally",
+                "rambler_enh_pref_cursor_editing_title" to "Cursor-aware editing",
+                "rambler_enh_pref_cursor_editing_summary" to
+                    "Send text after the cursor, scope spoken edits to selections, and re-select edited text",
+                "rambler_enh_pref_app_context_title" to "App context",
+                "rambler_enh_pref_app_context_summary" to
+                    "Share active app name, input type, and field hint so Rambler adapts formatting",
             ),
-            "values-zh-rTW" to (
-                "Rambler 增強功能" to
-                    "Hex 聲波動畫、自訂指示、語音辭典、聯絡人與聽寫行為設定"
-            ),
-            "values-b+zh+Hant" to (
-                "Rambler 增強功能" to
-                    "Hex 聲波動畫、自訂指示、語音辭典、聯絡人與聽寫行為設定"
-            ),
+            "values-zh-rTW" to zhHantSettingsStrings(),
+            "values-b+zh+Hant" to zhHantSettingsStrings(),
         )
-        for ((folder, pair) in entryStrings) {
+        for ((folder, pairs) in stringsByFolder) {
             val path = "res/$folder/strings.xml"
             if (folder != "values" && !get(path).isFile) continue
             document(path).use { doc ->
-                ensureString(doc, "rambler_enhancements_entry_title", pair.first)
-                ensureString(doc, "rambler_enhancements_entry_summary", pair.second)
+                for ((name, value) in pairs) {
+                    ensureString(doc, name, value)
+                }
             }
         }
 
-        // 3. Inject entry Preference into every present Voice typing / Rambler settings screen
-        val candidateXmls = listOf(
-            "res/xml/setting_jetson_voice.xml",
+        var injectedCount = 0
+
+        // 3. Inject exhaustive native controls into Gboard's Rambler voice typing screen
+        if (get(JETSON_VOICE_SETTINGS_XML).isFile) {
+            document(JETSON_VOICE_SETTINGS_XML).use { doc ->
+                injectExhaustiveJetsonVoicePreferences(doc, selected)
+            }
+            injectedCount++
+        }
+
+        // 4. Keep unified Rambler Enhancements entry in Voice typing screens
+        val voiceXmls = listOf(
             "res/xml/setting_voice_unified.xml",
             "res/xml/setting_voice.xml",
         )
-        var injectedCount = 0
-        for (xmlPath in candidateXmls) {
+        for (xmlPath in voiceXmls) {
             if (!get(xmlPath).isFile) continue
             document(xmlPath).use { doc ->
                 injectSettingsEntryPreference(doc)
@@ -340,11 +400,267 @@ internal val ramblerSharedSettingsResourcePatch = resourcePatch(
         }
         if (injectedCount == 0) {
             throw PatchException(
-                "Could not locate any Gboard Voice typing settings XML (${candidateXmls.joinToString()})",
+                "Could not locate any Gboard Voice typing settings XML ($JETSON_VOICE_SETTINGS_XML, ${voiceXmls.joinToString()})",
             )
         }
     }
 }
+
+private fun ramblerFeatureSelectionResourcePatch(
+    feature: RamblerFeature,
+    description: String,
+) = resourcePatch(description = description) {
+    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    dependsOn(ramblerSharedSettingsResourcePatch)
+
+    execute {
+        RamblerResourceStateStore.markSelected(this, feature)
+    }
+}
+
+internal val ramblerWaveformResourcePatch = ramblerFeatureSelectionResourcePatch(
+    RamblerFeature.WAVEFORM,
+    "Expose Hex waveform settings directly inside Gboard's Rambler voice typing screen.",
+)
+internal val ramblerCustomInstructionsResourcePatch = ramblerFeatureSelectionResourcePatch(
+    RamblerFeature.CUSTOM_INSTRUCTIONS,
+    "Expose Custom instructions directly inside Gboard's Rambler voice typing screen.",
+)
+internal val ramblerPersonalDictionaryResourcePatch = ramblerFeatureSelectionResourcePatch(
+    RamblerFeature.PERSONAL_DICTIONARY,
+    "Expose Use dictionary words toggle and Voice dictionary manager inside Gboard's Rambler voice typing screen.",
+)
+internal val ramblerContactNamesResourcePatch = ramblerFeatureSelectionResourcePatch(
+    RamblerFeature.CONTACT_NAMES,
+    "Expose Contact names sync inside Gboard's Rambler voice typing screen.",
+)
+internal val ramblerCursorEditingResourcePatch = ramblerFeatureSelectionResourcePatch(
+    RamblerFeature.CURSOR_EDITING,
+    "Expose Append-only dictation and Cursor-aware editing toggles inside Gboard's Rambler voice typing screen.",
+)
+internal val ramblerAppContextResourcePatch = ramblerFeatureSelectionResourcePatch(
+    RamblerFeature.APP_CONTEXT,
+    "Expose App context toggle inside Gboard's Rambler voice typing screen.",
+)
+
+private fun zhHantSettingsStrings(): List<Pair<String, String>> = listOf(
+    "rambler_enhancements_entry_title" to "Rambler 增強功能",
+    "rambler_enhancements_entry_summary" to "Hex 聲波動畫、自訂指示、語音辭典、聯絡人與聽寫行為設定",
+    "rambler_enh_custom_instruction_title" to "自訂指示",
+    "rambler_enh_custom_instruction_summary" to "Rambler 每次語音輸入時套用的風格規則，例如拼字、標點或語氣",
+    "rambler_enh_custom_instruction_hint" to "會附加到 Rambler 的預設指示中。例如：所有數字一律使用阿拉伯數字。",
+    "rambler_enh_cat_waveform" to "聲波動畫",
+    "rambler_enh_pref_waveform_title" to "聲波動畫 (Hex)",
+    "rambler_enh_pref_waveform_summary" to "聆聽與處理動畫、配色與 Hex 細節微調",
+    "rambler_enh_cat_dictionary_contacts" to "語音辭典與聯絡人",
+    "rambler_enh_pref_use_dict_title" to "使用語音辭典詞彙",
+    "rambler_enh_pref_use_dict_summary" to "每次 Rambler 語音輸入時一併傳送已儲存的語音辭典詞彙",
+    "rambler_enh_pref_manage_dict_title" to "管理語音辭典",
+    "rambler_enh_pref_manage_dict_summary" to "新增、匯入 (.txt)、匯出、移除或清除 MUSE_STATS 詞彙",
+    "rambler_enh_pref_contacts_title" to "聯絡人名稱同步",
+    "rambler_enh_pref_contacts_summary" to "將手機聯絡人名稱同步至 Rambler 語音辭典",
+    "rambler_enh_cat_behavior" to "聽寫行為",
+    "rambler_enh_pref_append_only_title" to "僅附加模式（不重寫前文）",
+    "rambler_enh_pref_append_only_summary" to "在游標處插入新語音而不重寫先前文字；有選取文字時仍可正常語音編輯",
+    "rambler_enh_pref_cursor_editing_title" to "游標感知編輯",
+    "rambler_enh_pref_cursor_editing_summary" to "傳送游標後的文字、僅編輯選取範圍，並在編輯後重新選取文字",
+    "rambler_enh_pref_app_context_title" to "應用程式情境",
+    "rambler_enh_pref_app_context_summary" to "傳送目前應用程式名稱與輸入欄位提示，讓 Rambler 依情境調整格式",
+)
+
+internal fun addCustomInstructionPrefIdempotently(screenDoc: Document) {
+    val root = screenDoc.documentElement
+    if (screenDoc.hasPreferenceKey(CUSTOM_INSTRUCTION_PREF_KEY)) {
+        return
+    }
+    val categoryTag = root.preferredCategoryTag()
+    val category = screenDoc.createElement(categoryTag)
+    val field = screenDoc.createElement("EditTextPreference").apply {
+        setAndroidAttr("key", CUSTOM_INSTRUCTION_PREF_KEY)
+        setAndroidAttr("persistent", "true")
+        setAndroidAttr("defaultValue", "")
+        setAndroidAttr("title", "@string/rambler_enh_custom_instruction_title")
+        setAndroidAttr("summary", "@string/rambler_enh_custom_instruction_summary")
+        setAndroidAttr("dialogTitle", "@string/rambler_enh_custom_instruction_title")
+        setAndroidAttr("dialogMessage", "@string/rambler_enh_custom_instruction_hint")
+    }
+    category.appendChild(field)
+    root.insertBefore(category, root.firstChild)
+}
+
+internal fun injectExhaustiveJetsonVoicePreferences(
+    screenDoc: Document,
+    selected: Set<RamblerFeature>,
+) {
+    if (selected.isEmpty()) return
+    if (RamblerFeature.CUSTOM_INSTRUCTIONS in selected) {
+        addCustomInstructionPrefIdempotently(screenDoc)
+    }
+
+    val root = screenDoc.documentElement
+    val categoryTag = root.preferredCategoryTag()
+    // Place our categories above Gboard's trailing Help & feedback PreferenceCategory.
+    val anchor = root.childElements()
+        .lastOrNull { el ->
+            el.tagName.endsWith("PreferenceCategory") &&
+                !el.containsPreferenceKey(CUSTOM_INSTRUCTION_PREF_KEY) &&
+                el.androidAttr("key")?.startsWith("rambler_enh_cat_") != true
+        }
+
+    fun insertCategory(categoryKey: String, titleRes: String, rows: List<Element>) {
+        if (rows.isEmpty() || screenDoc.hasPreferenceKey(categoryKey)) return
+        val category = screenDoc.createElement(categoryTag).apply {
+            setAndroidAttr("key", categoryKey)
+            setAndroidAttr("title", titleRes)
+        }
+        rows.forEach(category::appendChild)
+        if (anchor != null) {
+            root.insertBefore(category, anchor)
+        } else {
+            root.appendChild(category)
+        }
+    }
+
+    fun sectionIntentPreference(
+        key: String,
+        titleRes: String,
+        summaryRes: String,
+        section: String,
+    ): Element? {
+        if (screenDoc.hasPreferenceKey(key)) return null
+        val pref = screenDoc.createElement("Preference").apply {
+            setAndroidAttr("key", key)
+            setAndroidAttr("persistent", "false")
+            setAndroidAttr("title", titleRes)
+            setAndroidAttr("summary", summaryRes)
+        }
+        val intent = screenDoc.createElement("intent").apply {
+            setAndroidAttr("action", OPEN_SETTINGS_ACTION)
+        }
+        val extra = screenDoc.createElement("extra").apply {
+            setAndroidAttr("name", "section")
+            setAndroidAttr("value", section)
+        }
+        intent.appendChild(extra)
+        pref.appendChild(intent)
+        return pref
+    }
+
+    fun switchPreference(
+        key: String,
+        defaultValue: Boolean,
+        titleRes: String,
+        summaryRes: String,
+    ): Element? {
+        if (screenDoc.hasPreferenceKey(key)) return null
+        return screenDoc.createElement("SwitchPreferenceCompat").apply {
+            setAndroidAttr("key", key)
+            setAndroidAttr("persistent", "true")
+            setAndroidAttr("defaultValue", defaultValue.toString())
+            setAndroidAttr("title", titleRes)
+            setAndroidAttr("summary", summaryRes)
+        }
+    }
+
+    if (RamblerFeature.WAVEFORM in selected) {
+        val rows = listOfNotNull(
+            sectionIntentPreference(
+                key = "rambler_enh_waveform_entry",
+                titleRes = "@string/rambler_enh_pref_waveform_title",
+                summaryRes = "@string/rambler_enh_pref_waveform_summary",
+                section = "waveform",
+            ),
+        )
+        insertCategory("rambler_enh_cat_waveform", "@string/rambler_enh_cat_waveform", rows)
+    }
+
+    if (RamblerFeature.PERSONAL_DICTIONARY in selected || RamblerFeature.CONTACT_NAMES in selected) {
+        val rows = mutableListOf<Element>()
+        if (RamblerFeature.PERSONAL_DICTIONARY in selected) {
+            switchPreference(
+                key = USE_DICTIONARY_WORDS_PREF_KEY,
+                defaultValue = true,
+                titleRes = "@string/rambler_enh_pref_use_dict_title",
+                summaryRes = "@string/rambler_enh_pref_use_dict_summary",
+            )?.let(rows::add)
+            sectionIntentPreference(
+                key = "rambler_enh_dictionary_entry",
+                titleRes = "@string/rambler_enh_pref_manage_dict_title",
+                summaryRes = "@string/rambler_enh_pref_manage_dict_summary",
+                section = "dictionary",
+            )?.let(rows::add)
+        }
+        if (RamblerFeature.CONTACT_NAMES in selected) {
+            sectionIntentPreference(
+                key = "rambler_enh_contacts_entry",
+                titleRes = "@string/rambler_enh_pref_contacts_title",
+                summaryRes = "@string/rambler_enh_pref_contacts_summary",
+                section = "contacts",
+            )?.let(rows::add)
+        }
+        insertCategory(
+            "rambler_enh_cat_dictionary_contacts",
+            "@string/rambler_enh_cat_dictionary_contacts",
+            rows,
+        )
+    }
+
+    if (RamblerFeature.CURSOR_EDITING in selected || RamblerFeature.APP_CONTEXT in selected) {
+        val rows = mutableListOf<Element>()
+        if (RamblerFeature.CURSOR_EDITING in selected) {
+            switchPreference(
+                key = APPEND_ONLY_PREF_KEY,
+                defaultValue = false,
+                titleRes = "@string/rambler_enh_pref_append_only_title",
+                summaryRes = "@string/rambler_enh_pref_append_only_summary",
+            )?.let(rows::add)
+            switchPreference(
+                key = CURSOR_EDITING_PREF_KEY,
+                defaultValue = true,
+                titleRes = "@string/rambler_enh_pref_cursor_editing_title",
+                summaryRes = "@string/rambler_enh_pref_cursor_editing_summary",
+            )?.let(rows::add)
+        }
+        if (RamblerFeature.APP_CONTEXT in selected) {
+            switchPreference(
+                key = APP_CONTEXT_PREF_KEY,
+                defaultValue = true,
+                titleRes = "@string/rambler_enh_pref_app_context_title",
+                summaryRes = "@string/rambler_enh_pref_app_context_summary",
+            )?.let(rows::add)
+        }
+        insertCategory("rambler_enh_cat_behavior", "@string/rambler_enh_cat_behavior", rows)
+    }
+}
+
+private fun Document.hasPreferenceKey(key: String): Boolean {
+    val all = getElementsByTagName("*")
+    for (i in 0 until all.length) {
+        val el = all.item(i) as? Element ?: continue
+        if (el.androidAttr("key") == key) {
+            return true
+        }
+    }
+    return false
+}
+
+private fun Element.containsPreferenceKey(key: String): Boolean {
+    if (androidAttr("key") == key) return true
+    val all = getElementsByTagName("*")
+    for (i in 0 until all.length) {
+        val el = all.item(i) as? Element ?: continue
+        if (el.androidAttr("key") == key) {
+            return true
+        }
+    }
+    return false
+}
+
+private fun Element.preferredCategoryTag(): String =
+    childElements()
+        .firstOrNull { it.tagName.endsWith("PreferenceCategory") }
+        ?.tagName
+        ?: "androidx.preference.PreferenceCategory"
 
 internal fun registerSettingsActivity(manifestDoc: Document) {
     val manifest = manifestDoc.documentElement

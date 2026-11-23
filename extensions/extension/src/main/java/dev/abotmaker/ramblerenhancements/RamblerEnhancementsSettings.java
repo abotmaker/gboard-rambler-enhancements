@@ -10,12 +10,19 @@ import java.util.Set;
 
 /**
  * Direct-Boot-safe standalone SharedPreferences store for Rambler behavior toggles
- * (append-only dictation, cursor-aware editing, app context) and seeded contact history.
+ * and seeded contact history.
+ *
+ * <p>Live boolean toggles are stored in Gboard's default SharedPreferences
+ * ({@code <packageName>_preferences}) so native {@code SwitchPreferenceCompat} rows injected
+ * directly into Gboard's "Rambler voice typing" screen and {@link RamblerEnhancementsActivity}
+ * always read and write the exact same keys in real time.</p>
  */
 public final class RamblerEnhancementsSettings {
     private static final String TAG = "RamblerEnhancements";
     public static final String PREF_FILE = "rambler_enhancements_prefs";
 
+    public static final String PREF_KEY_USE_DICTIONARY_WORDS =
+            "pref_rambler_use_dictionary_words";
     public static final String PREF_KEY_APPEND_ONLY = "pref_rambler_append_only";
     public static final String PREF_KEY_CURSOR_EDITING_ENABLED =
             "pref_rambler_cursor_editing_enabled";
@@ -24,11 +31,35 @@ public final class RamblerEnhancementsSettings {
     public static final String PREF_KEY_SEEDED_CONTACTS =
             "pref_rambler_contacts_seeded_names";
 
+    public static final boolean DEFAULT_USE_DICTIONARY_WORDS = true;
     public static final boolean DEFAULT_APPEND_ONLY = false;
     public static final boolean DEFAULT_CURSOR_EDITING_ENABLED = true;
     public static final boolean DEFAULT_APP_CONTEXT_ENABLED = true;
 
     private RamblerEnhancementsSettings() {
+    }
+
+    /** Gboard's default SharedPreferences file shared with native SwitchPreferenceCompat rows. */
+    public static SharedPreferences defaultPreferencesOrNull(Context context) {
+        if (context == null) {
+            return null;
+        }
+        Context app = context.getApplicationContext();
+        Context base = app != null ? app : context;
+        String defaultName = base.getPackageName() + "_preferences";
+        try {
+            return base.getSharedPreferences(defaultName, Context.MODE_PRIVATE);
+        } catch (IllegalStateException directBootLocked) {
+            try {
+                return base.createDeviceProtectedStorageContext()
+                        .getSharedPreferences(defaultName, Context.MODE_PRIVATE);
+            } catch (Throwable ignored) {
+                return null;
+            }
+        } catch (Throwable throwable) {
+            logWarningSafely("Failed to open default SharedPreferences", throwable);
+            return null;
+        }
     }
 
     public static SharedPreferences preferencesOrNull(Context context) {
@@ -52,41 +83,56 @@ public final class RamblerEnhancementsSettings {
         }
     }
 
+    public static boolean isLiveToggleKey(String key) {
+        return PREF_KEY_USE_DICTIONARY_WORDS.equals(key)
+                || PREF_KEY_APPEND_ONLY.equals(key)
+                || PREF_KEY_CURSOR_EDITING_ENABLED.equals(key)
+                || PREF_KEY_APP_CONTEXT_ENABLED.equals(key);
+    }
+
+    public static boolean readUseDictionaryWords(Context context) {
+        return readLiveBoolean(
+                context, PREF_KEY_USE_DICTIONARY_WORDS, DEFAULT_USE_DICTIONARY_WORDS);
+    }
+
     public static boolean readAppendOnly(Context context) {
-        return readBoolean(preferencesOrNull(context), PREF_KEY_APPEND_ONLY, DEFAULT_APPEND_ONLY);
+        return readLiveBoolean(context, PREF_KEY_APPEND_ONLY, DEFAULT_APPEND_ONLY);
     }
 
     public static boolean readCursorEditingEnabled(Context context) {
-        return readBoolean(
-                preferencesOrNull(context),
-                PREF_KEY_CURSOR_EDITING_ENABLED,
-                DEFAULT_CURSOR_EDITING_ENABLED);
+        return readLiveBoolean(
+                context, PREF_KEY_CURSOR_EDITING_ENABLED, DEFAULT_CURSOR_EDITING_ENABLED);
     }
 
     public static boolean readAppContextEnabled(Context context) {
-        return readBoolean(
-                preferencesOrNull(context),
-                PREF_KEY_APP_CONTEXT_ENABLED,
-                DEFAULT_APP_CONTEXT_ENABLED);
+        return readLiveBoolean(
+                context, PREF_KEY_APP_CONTEXT_ENABLED, DEFAULT_APP_CONTEXT_ENABLED);
+    }
+
+    public static boolean writeUseDictionaryWords(Context context, boolean enabled) {
+        RamblerFlagRuntime.seedApplicationContext(context);
+        boolean ok = writeLiveBoolean(context, PREF_KEY_USE_DICTIONARY_WORDS, enabled);
+        RamblerFlagRuntime.refreshLiveFlags();
+        return ok;
     }
 
     public static boolean writeAppendOnly(Context context, boolean enabled) {
         RamblerFlagRuntime.seedApplicationContext(context);
-        boolean ok = writeBoolean(context, PREF_KEY_APPEND_ONLY, enabled);
+        boolean ok = writeLiveBoolean(context, PREF_KEY_APPEND_ONLY, enabled);
         RamblerFlagRuntime.refreshLiveFlags();
         return ok;
     }
 
     public static boolean writeCursorEditingEnabled(Context context, boolean enabled) {
         RamblerFlagRuntime.seedApplicationContext(context);
-        boolean ok = writeBoolean(context, PREF_KEY_CURSOR_EDITING_ENABLED, enabled);
+        boolean ok = writeLiveBoolean(context, PREF_KEY_CURSOR_EDITING_ENABLED, enabled);
         RamblerFlagRuntime.refreshLiveFlags();
         return ok;
     }
 
     public static boolean writeAppContextEnabled(Context context, boolean enabled) {
         RamblerFlagRuntime.seedApplicationContext(context);
-        boolean ok = writeBoolean(context, PREF_KEY_APP_CONTEXT_ENABLED, enabled);
+        boolean ok = writeLiveBoolean(context, PREF_KEY_APP_CONTEXT_ENABLED, enabled);
         RamblerFlagRuntime.refreshLiveFlags();
         return ok;
     }
@@ -136,37 +182,53 @@ public final class RamblerEnhancementsSettings {
         }
     }
 
-    private static boolean readBoolean(
-            SharedPreferences preferences, String key, boolean fallback) {
+    private static boolean readLiveBoolean(Context context, String key, boolean fallback) {
+        SharedPreferences defaultPrefs = defaultPreferencesOrNull(context);
+        Boolean fromDefault = readBooleanOrNull(defaultPrefs, key);
+        if (fromDefault != null) {
+            return fromDefault.booleanValue();
+        }
+        // Fallback for values written under v1.0.0's dedicated prefs file.
+        Boolean fromLegacy = readBooleanOrNull(preferencesOrNull(context), key);
+        return fromLegacy != null ? fromLegacy.booleanValue() : fallback;
+    }
+
+    private static boolean writeLiveBoolean(Context context, String key, boolean enabled) {
+        try {
+            SharedPreferences defaultPrefs = defaultPreferencesOrNull(context);
+            boolean wroteDefault = defaultPrefs != null
+                    && defaultPrefs.edit().putBoolean(key, enabled).commit();
+            SharedPreferences dedicated = preferencesOrNull(context);
+            if (dedicated != null) {
+                dedicated.edit().putBoolean(key, enabled).apply();
+            }
+            return wroteDefault;
+        } catch (Throwable unavailable) {
+            logWarningSafely("Failed to persist Rambler toggle " + key, unavailable);
+            return false;
+        }
+    }
+
+    private static Boolean readBooleanOrNull(SharedPreferences preferences, String key) {
         if (preferences == null) {
-            return fallback;
+            return null;
         }
         try {
             Object raw = preferences.getAll().get(key);
             if (raw instanceof Boolean boolValue) {
-                return boolValue.booleanValue();
+                return boolValue;
             }
             if (raw instanceof String textValue) {
                 if ("true".equalsIgnoreCase(textValue.trim())) {
-                    return true;
+                    return Boolean.TRUE;
                 }
                 if ("false".equalsIgnoreCase(textValue.trim())) {
-                    return false;
+                    return Boolean.FALSE;
                 }
             }
-            return fallback;
+            return null;
         } catch (Throwable unreadable) {
-            return fallback;
-        }
-    }
-
-    private static boolean writeBoolean(Context context, String key, boolean enabled) {
-        try {
-            SharedPreferences preferences = preferencesOrNull(context);
-            return preferences != null && preferences.edit().putBoolean(key, enabled).commit();
-        } catch (Throwable unavailable) {
-            logWarningSafely("Failed to persist Rambler toggle " + key, unavailable);
-            return false;
+            return null;
         }
     }
 

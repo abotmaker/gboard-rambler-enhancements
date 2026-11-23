@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "patches": [
     {
       "name": "Rambler App Context",
@@ -38,7 +38,7 @@
     },
     {
       "name": "Rambler Custom Instructions",
-      "description": "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -\u003e Voice typing -\u003e Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "description": "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -\u003e Voice typing -\u003e Rambler voice typing and Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
       "use": true,
       "dependencies": [],
       "compatiblePackages": {
@@ -49,7 +49,7 @@
     },
     {
       "name": "Rambler Personal Dictionary",
-      "description": "Enables Gboard Rambler\u0027s UserFeatureCache MUSE_STATS personal voice dictionary (credited to nl-morphe-patches) with add, import/export (.txt), remove, and clear controls in Rambler Enhancements. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
+      "description": "Enables Gboard Rambler\u0027s UserFeatureCache MUSE_STATS personal voice dictionary (credited to nl-morphe-patches) with a live Use dictionary words toggle plus add, import/export (.txt), remove, and clear controls. Verified on Gboard 18.5.4 (current GboardWu target); newer versions are best-effort and unverified.",
       "use": true,
       "dependencies": [],
       "compatiblePackages": {

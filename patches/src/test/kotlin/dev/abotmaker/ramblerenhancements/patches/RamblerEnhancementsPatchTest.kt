@@ -58,18 +58,70 @@ class RamblerEnhancementsPatchTest {
         val screen = parseXml(
             """
             <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-                <androidx.preference.PreferenceCategory />
+                <Preference android:key="rambler_dictionary" />
+                <androidx.preference.PreferenceCategory>
+                    <Preference android:key="pref_key_jetson_feedback" />
+                </androidx.preference.PreferenceCategory>
             </PreferenceScreen>
             """.trimIndent(),
         )
-        injectSettingsEntryPreference(screen)
-        injectSettingsEntryPreference(screen)
-        addCustomInstructionPrefIdempotently(screen)
-        addCustomInstructionPrefIdempotently(screen)
-        val prefs = screen.getElementsByTagName("Preference")
-        assertEquals(1, prefs.length)
-        val edits = screen.getElementsByTagName("EditTextPreference")
-        assertEquals(1, edits.length)
+        val allFeatures = RamblerFeature.values().toSet()
+        injectExhaustiveJetsonVoicePreferences(screen, allFeatures)
+        injectExhaustiveJetsonVoicePreferences(screen, allFeatures)
+
+        // Custom instructions is placed first, Help and feedback stays last.
+        val topChildren = screen.documentElement.childElements()
+        assertEquals(
+            CUSTOM_INSTRUCTION_PREF_KEY,
+            topChildren.first().childElements("EditTextPreference").single().androidAttr("key"),
+        )
+        assertEquals(
+            "pref_key_jetson_feedback",
+            topChildren.last().childElements("Preference").single().androidAttr("key"),
+        )
+        assertEquals(1, screen.getElementsByTagName("EditTextPreference").length)
+        assertEquals(4, screen.getElementsByTagName("SwitchPreferenceCompat").length)
+        val switchKeys = (0 until screen.getElementsByTagName("SwitchPreferenceCompat").length).map { idx ->
+            (screen.getElementsByTagName("SwitchPreferenceCompat").item(idx) as org.w3c.dom.Element)
+                .androidAttr("key")
+        }
+        assertEquals(
+            listOf(
+                USE_DICTIONARY_WORDS_PREF_KEY,
+                APPEND_ONLY_PREF_KEY,
+                CURSOR_EDITING_PREF_KEY,
+                APP_CONTEXT_PREF_KEY,
+            ),
+            switchKeys,
+        )
+
+        // Partial selection only injects the chosen feature's rows.
+        val waveformOnlyScreen = parseXml(
+            """
+            <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+                <androidx.preference.PreferenceCategory>
+                    <Preference android:key="pref_key_jetson_feedback" />
+                </androidx.preference.PreferenceCategory>
+            </PreferenceScreen>
+            """.trimIndent(),
+        )
+        injectExhaustiveJetsonVoicePreferences(waveformOnlyScreen, setOf(RamblerFeature.WAVEFORM))
+        assertEquals(0, waveformOnlyScreen.getElementsByTagName("EditTextPreference").length)
+        assertEquals(0, waveformOnlyScreen.getElementsByTagName("SwitchPreferenceCompat").length)
+        val waveformExtras = waveformOnlyScreen.getElementsByTagName("extra")
+        assertEquals(1, waveformExtras.length)
+        assertEquals("waveform", (waveformExtras.item(0) as org.w3c.dom.Element).androidAttr("value"))
+
+        val voiceScreen = parseXml(
+            """
+            <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+                <PreferenceCategory />
+            </PreferenceScreen>
+            """.trimIndent(),
+        )
+        injectSettingsEntryPreference(voiceScreen)
+        injectSettingsEntryPreference(voiceScreen)
+        assertEquals(1, voiceScreen.getElementsByTagName("Preference").length)
     }
 
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {

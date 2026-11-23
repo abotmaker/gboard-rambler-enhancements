@@ -2,6 +2,7 @@ package dev.abotmaker.ramblerenhancements;
 
 import android.app.Application;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Log;
 
 import java.lang.reflect.Field;
@@ -48,9 +49,12 @@ public final class RamblerFlagRuntime {
     private static final WeakHashMap<Object, String> LIVE_TOGGLE_FLAGS =
             new WeakHashMap<Object, String>();
     private static final AtomicBoolean CONTEXT_HYDRATED = new AtomicBoolean(false);
+    private static final AtomicBoolean PREF_LISTENER_ATTACHED = new AtomicBoolean(false);
 
     private static volatile Context applicationContext;
     private static volatile FlagHandles cachedHandles;
+    private static volatile SharedPreferences.OnSharedPreferenceChangeListener livePrefListener;
+    private static volatile Boolean useDictionaryWordsOverrideForTesting;
     private static volatile Boolean appendOnlyOverrideForTesting;
     private static volatile Boolean cursorEditingOverrideForTesting;
     private static volatile Boolean appContextOverrideForTesting;
@@ -72,6 +76,7 @@ public final class RamblerFlagRuntime {
             // Keep caller context as fallback.
         }
         applicationContext = resolved;
+        attachDefaultPrefsListenerIfNeeded(resolved);
     }
 
     /**
@@ -89,6 +94,35 @@ public final class RamblerFlagRuntime {
         }
     }
 
+    private static void attachDefaultPrefsListenerIfNeeded(Context context) {
+        if (context == null || PREF_LISTENER_ATTACHED.get()) {
+            return;
+        }
+        try {
+            SharedPreferences defaultPrefs =
+                    RamblerEnhancementsSettings.defaultPreferencesOrNull(context);
+            if (defaultPrefs == null) {
+                return;
+            }
+            if (!PREF_LISTENER_ATTACHED.compareAndSet(false, true)) {
+                return;
+            }
+            SharedPreferences.OnSharedPreferenceChangeListener listener = (prefs, key) -> {
+                if (RamblerEnhancementsSettings.isLiveToggleKey(key)) {
+                    refreshLiveFlags();
+                }
+            };
+            livePrefListener = listener;
+            defaultPrefs.registerOnSharedPreferenceChangeListener(listener);
+        } catch (Throwable ignored) {
+            // Best-effort live listener for native SwitchPreferenceCompat toggles.
+        }
+    }
+
+    static void setUseDictionaryWordsOverrideForTesting(Boolean enabled) {
+        useDictionaryWordsOverrideForTesting = enabled;
+    }
+
     static void setAppendOnlyOverrideForTesting(Boolean enabled) {
         appendOnlyOverrideForTesting = enabled;
     }
@@ -102,15 +136,29 @@ public final class RamblerFlagRuntime {
     }
 
     static void clearForTesting() {
+        useDictionaryWordsOverrideForTesting = null;
         appendOnlyOverrideForTesting = null;
         cursorEditingOverrideForTesting = null;
         appContextOverrideForTesting = null;
         applicationContext = null;
         cachedHandles = null;
+        livePrefListener = null;
         CONTEXT_HYDRATED.set(false);
+        PREF_LISTENER_ATTACHED.set(false);
         synchronized (FLAG_CACHE_LOCK) {
             LIVE_TOGGLE_FLAGS.clear();
         }
+    }
+
+    public static boolean isUseDictionaryWordsEnabled() {
+        if (!RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY) {
+            return false;
+        }
+        Boolean override = useDictionaryWordsOverrideForTesting;
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return RamblerEnhancementsSettings.readUseDictionaryWords(resolveContext());
     }
 
     public static boolean isAppendOnlyEnabled() {
@@ -178,11 +226,20 @@ public final class RamblerFlagRuntime {
 
             case SHOW_DICTIONARY_SETTINGS_FLAG:
             case SHOW_CLEAR_ALL_FLAG:
-            case SEND_WORDS_FLAG:
             case FEATURE_CACHE_FLAG:
                 return RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY
                         ? enableBoolean(rawValue)
                         : rawValue;
+
+            case SEND_WORDS_FLAG:
+                if (!RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY) {
+                    return rawValue;
+                }
+                rememberLiveFlag(flagInstance, flagName);
+                if (rawValue instanceof Boolean) {
+                    return Boolean.valueOf(isUseDictionaryWordsEnabled());
+                }
+                return rawValue;
 
             case SURROUNDING_TEXT_LIMIT_FLAG:
                 if (!RamblerDynamicConfig.FEATURE_CURSOR_EDITING) {
@@ -312,6 +369,9 @@ public final class RamblerFlagRuntime {
         }
         synchronized (FLAG_CACHE_LOCK) {
             LIVE_TOGGLE_FLAGS.put(flagInstance, flagName);
+        }
+        if (!PREF_LISTENER_ATTACHED.get()) {
+            attachDefaultPrefsListenerIfNeeded(resolveContext());
         }
     }
 

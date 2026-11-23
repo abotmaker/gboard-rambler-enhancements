@@ -5,14 +5,9 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLa
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.util.smali.ExternalLabel
 import com.android.tools.smali.dexlib2.AccessFlags
-import org.w3c.dom.Document
-import org.w3c.dom.Element
 
-private const val CUSTOM_INSTRUCTION_PREF_KEY = "pref_key_rambler_custom_instruction"
-private const val JETSON_VOICE_SETTINGS_XML = "res/xml/setting_jetson_voice.xml"
 private const val APPEND_COMMIT_HELPER = "ramblerEnhancementsAppendCommit"
 private const val CHAR_SEQUENCE_TYPE = "Ljava/lang/CharSequence;"
 
@@ -30,7 +25,11 @@ val ramblerWaveformAnimationPatch = bytecodePatch(
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
-    dependsOn(ramblerSharedExtensionPatch, ramblerSharedSettingsResourcePatch)
+    dependsOn(
+        ramblerSharedExtensionPatch,
+        ramblerSharedSettingsResourcePatch,
+        ramblerWaveformResourcePatch,
+    )
 
     execute {
         val state = RamblerPatchStateStore.state(this)
@@ -80,76 +79,10 @@ val ramblerWaveformAnimationPatch = bytecodePatch(
     }
 }
 
-private val ramblerCustomInstructionsResourcePatch = resourcePatch(
-    description = "Add Custom instructions EditTextPreference to Gboard's Rambler voice settings.",
-) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
-
-    execute {
-        val textsByFolder = mapOf(
-            "values" to Triple(
-                "Custom instructions",
-                "Style rules Rambler applies to everything you dictate, such as spelling, punctuation, or tone",
-                "Added to Rambler instructions. For example: Write every number in digits.",
-            ),
-            "values-zh-rTW" to Triple(
-                "自訂指示",
-                "Rambler 每次語音輸入時套用的風格規則，例如拼字、標點或語氣",
-                "會附加到 Rambler 的預設指示中。例如：所有數字一律使用阿拉伯數字。",
-            ),
-            "values-b+zh+Hant" to Triple(
-                "自訂指示",
-                "Rambler 每次語音輸入時套用的風格規則，例如拼字、標點或語氣",
-                "會附加到 Rambler 的預設指示中。例如：所有數字一律使用阿拉伯數字。",
-            ),
-        )
-        for ((folder, texts) in textsByFolder) {
-            val path = "res/$folder/strings.xml"
-            if (folder != "values" && !get(path).isFile) continue
-            document(path).use { doc ->
-                ensureString(doc, "rambler_enh_custom_instruction_title", texts.first)
-                ensureString(doc, "rambler_enh_custom_instruction_summary", texts.second)
-                ensureString(doc, "rambler_enh_custom_instruction_hint", texts.third)
-            }
-        }
-        if (get(JETSON_VOICE_SETTINGS_XML).isFile) {
-            document(JETSON_VOICE_SETTINGS_XML).use(::addCustomInstructionPrefIdempotently)
-        }
-    }
-}
-
-internal fun addCustomInstructionPrefIdempotently(screenDoc: Document) {
-    val root = screenDoc.documentElement
-    val all = screenDoc.getElementsByTagName("*")
-    for (i in 0 until all.length) {
-        val el = all.item(i) as? Element ?: continue
-        if (el.androidAttr("key") == CUSTOM_INSTRUCTION_PREF_KEY) {
-            return
-        }
-    }
-    val categoryTag = root.childElements()
-        .firstOrNull { it.tagName.endsWith("PreferenceCategory") }
-        ?.tagName
-        ?: "androidx.preference.PreferenceCategory"
-
-    val category = screenDoc.createElement(categoryTag)
-    val field = screenDoc.createElement("EditTextPreference").apply {
-        setAndroidAttr("key", CUSTOM_INSTRUCTION_PREF_KEY)
-        setAndroidAttr("persistent", "true")
-        setAndroidAttr("defaultValue", "")
-        setAndroidAttr("title", "@string/rambler_enh_custom_instruction_title")
-        setAndroidAttr("summary", "@string/rambler_enh_custom_instruction_summary")
-        setAndroidAttr("dialogTitle", "@string/rambler_enh_custom_instruction_title")
-        setAndroidAttr("dialogMessage", "@string/rambler_enh_custom_instruction_hint")
-    }
-    category.appendChild(field)
-    root.insertBefore(category, root.firstChild)
-}
-
 @Suppress("unused")
 val ramblerCustomInstructionsPatch = bytecodePatch(
     name = "Rambler Custom Instructions",
-    description = "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -> Voice typing -> Rambler Enhancements. $VERSION_NOTE",
+    description = "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -> Voice typing -> Rambler voice typing and Rambler Enhancements. $VERSION_NOTE",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
@@ -167,11 +100,15 @@ val ramblerCustomInstructionsPatch = bytecodePatch(
 @Suppress("unused")
 val ramblerPersonalDictionaryPatch = bytecodePatch(
     name = "Rambler Personal Dictionary",
-    description = "Enables Gboard Rambler's UserFeatureCache MUSE_STATS personal voice dictionary (credited to nl-morphe-patches) with add, import/export (.txt), remove, and clear controls in Rambler Enhancements. $VERSION_NOTE",
+    description = "Enables Gboard Rambler's UserFeatureCache MUSE_STATS personal voice dictionary (credited to nl-morphe-patches) with a live Use dictionary words toggle plus add, import/export (.txt), remove, and clear controls. $VERSION_NOTE",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
-    dependsOn(ramblerSharedExtensionPatch, ramblerSharedSettingsResourcePatch)
+    dependsOn(
+        ramblerSharedExtensionPatch,
+        ramblerSharedSettingsResourcePatch,
+        ramblerPersonalDictionaryResourcePatch,
+    )
 
     execute {
         RamblerPatchStateStore.state(this).selectedFeatures.add(RamblerFeature.PERSONAL_DICTIONARY)
@@ -189,6 +126,7 @@ val ramblerContactNamesPatch = bytecodePatch(
         ramblerPersonalDictionaryPatch,
         ramblerSharedExtensionPatch,
         ramblerSharedSettingsResourcePatch,
+        ramblerContactNamesResourcePatch,
     )
 
     execute {
@@ -203,7 +141,11 @@ val ramblerCursorEditingPatch = bytecodePatch(
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
-    dependsOn(ramblerSharedExtensionPatch, ramblerSharedSettingsResourcePatch)
+    dependsOn(
+        ramblerSharedExtensionPatch,
+        ramblerSharedSettingsResourcePatch,
+        ramblerCursorEditingResourcePatch,
+    )
 
     execute {
         val state = RamblerPatchStateStore.state(this)
@@ -267,7 +209,11 @@ val ramblerAppContextPatch = bytecodePatch(
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
-    dependsOn(ramblerSharedExtensionPatch, ramblerSharedSettingsResourcePatch)
+    dependsOn(
+        ramblerSharedExtensionPatch,
+        ramblerSharedSettingsResourcePatch,
+        ramblerAppContextResourcePatch,
+    )
 
     execute {
         RamblerPatchStateStore.state(this).selectedFeatures.add(RamblerFeature.APP_CONTEXT)

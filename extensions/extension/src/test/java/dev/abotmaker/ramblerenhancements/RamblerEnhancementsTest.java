@@ -173,6 +173,33 @@ public final class RamblerEnhancementsTest {
         RamblerFlagRuntime.refreshLiveFlags();
         assertEquals(Long.valueOf(1000L), surroundingLimit.resolved);
         assertEquals(2, surroundingLimit.notifyCount);
+
+        // Verify native SwitchPreferenceCompat writes to default SharedPreferences live-refresh flags!
+        Context context = RuntimeEnvironment.getApplication();
+        SharedPreferences defaultPrefs =
+                RamblerEnhancementsSettings.defaultPreferencesOrNull(context);
+        defaultPrefs.edit().clear().commit();
+        RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY = true;
+        RamblerFlagRuntime.setAppendOnlyOverrideForTesting(null);
+        RamblerFlagRuntime.seedAndRefreshIfNeeded(context);
+
+        FakeOkiFlag sendWords = new FakeOkiFlag(
+                RamblerFlagRuntime.SEND_WORDS_FLAG, Boolean.FALSE);
+        sendWords.recompute();
+        assertEquals(Boolean.TRUE, sendWords.resolved);
+
+        // Flipping SwitchPreferenceCompat writes directly to default SharedPreferences -> live listener fires!
+        defaultPrefs.edit()
+                .putBoolean(RamblerEnhancementsSettings.PREF_KEY_USE_DICTIONARY_WORDS, false)
+                .commit();
+        assertEquals(Boolean.FALSE, sendWords.resolved);
+        assertEquals(1, sendWords.notifyCount);
+
+        defaultPrefs.edit()
+                .putBoolean(RamblerEnhancementsSettings.PREF_KEY_APPEND_ONLY, true)
+                .commit();
+        assertEquals(Long.valueOf(0L), surroundingLimit.resolved);
+        assertTrue(surroundingLimit.notifyCount >= 3);
     }
 
     @Test
@@ -213,6 +240,9 @@ public final class RamblerEnhancementsTest {
         wPrefs.edit().clear().commit();
         SharedPreferences ePrefs = RamblerEnhancementsSettings.preferencesOrNull(context);
         ePrefs.edit().clear().commit();
+        SharedPreferences defaultPrefs =
+                RamblerEnhancementsSettings.defaultPreferencesOrNull(context);
+        defaultPrefs.edit().clear().commit();
 
         assertEquals(RamblerWaveformSettings.LISTENING_HEX_DOT_SCOPE,
                 RamblerWaveformSettings.snapshot(context).getListeningStyle());
@@ -230,6 +260,12 @@ public final class RamblerEnhancementsTest {
         assertEquals("#34D399", snap.getListeningColorValue());
         assertTrue(snap.isIosHaloGlow());
         assertNull(RamblerWaveformSettings.tryNormalizeColorHex("bad"));
+
+        assertTrue(RamblerEnhancementsSettings.readUseDictionaryWords(context));
+        assertTrue(RamblerEnhancementsSettings.writeUseDictionaryWords(context, false));
+        assertFalse(RamblerEnhancementsSettings.readUseDictionaryWords(context));
+        assertFalse(defaultPrefs.getBoolean(
+                RamblerEnhancementsSettings.PREF_KEY_USE_DICTIONARY_WORDS, true));
 
         assertFalse(RamblerEnhancementsSettings.readAppendOnly(context));
         assertTrue(RamblerEnhancementsSettings.writeAppendOnly(context, true));
