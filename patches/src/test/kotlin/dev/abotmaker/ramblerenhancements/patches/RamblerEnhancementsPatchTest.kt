@@ -139,6 +139,98 @@ class RamblerEnhancementsPatchTest {
         assertTrue(json.get("version").asString.isNotBlank())
     }
 
+    @Test
+    fun dynamicConfigClinitAllocatesRegistersEvenWhenOriginalHadZero() {
+        val zeroRegClinit = com.android.tools.smali.dexlib2.immutable.ImmutableMethod(
+            DYNAMIC_CONFIG_TYPE,
+            "<clinit>",
+            emptyList(),
+            "V",
+            com.android.tools.smali.dexlib2.AccessFlags.STATIC.value or
+                com.android.tools.smali.dexlib2.AccessFlags.CONSTRUCTOR.value,
+            emptySet(),
+            emptySet(),
+            com.android.tools.smali.dexlib2.builder.MutableMethodImplementation(0),
+        )
+        val configClass = app.morphe.patcher.util.proxy.mutableTypes.MutableClass(
+            com.android.tools.smali.dexlib2.immutable.ImmutableClassDef(
+                DYNAMIC_CONFIG_TYPE,
+                com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value or
+                    com.android.tools.smali.dexlib2.AccessFlags.FINAL.value,
+                "Ljava/lang/Object;",
+                emptyList(),
+                null,
+                emptySet(),
+                emptyList(),
+                listOf(zeroRegClinit),
+            ),
+        )
+        val state = RamblerPatchRunState().apply {
+            selectedFeatures.addAll(RamblerFeature.values())
+        }
+        rewriteDynamicConfigClinitOnClass(configClass, state)
+
+        val clinit = configClass.methods.single { it.name == "<clinit>" }
+        val impl = clinit.implementation!!
+        assertTrue(
+            "Expected registerCount >= 1 so v0 passes ART DEX verification, got ${impl.registerCount}",
+            impl.registerCount >= 1,
+        )
+        assertTrue("Expected non-empty <clinit> instructions", impl.instructions.size > 20)
+        assertEquals(com.android.tools.smali.dexlib2.Opcode.RETURN_VOID, impl.instructions.last().opcode)
+    }
+
+    @Test
+    fun helperMethodRetainsTryCatchMetadataForMoveException() {
+        val host = app.morphe.patcher.util.proxy.mutableTypes.MutableClass(
+            com.android.tools.smali.dexlib2.immutable.ImmutableClassDef(
+                "Lcom/example/Host;",
+                com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value,
+                "Ljava/lang/Object;",
+                emptyList(),
+                null,
+                emptySet(),
+                emptyList(),
+                emptyList(),
+            ),
+        )
+        host.addHelperMethodIfMissing(
+            name = "safeCommit",
+            parameterTypes = listOf("Ljava/lang/Object;"),
+            returnType = "Z",
+            accessFlags = com.android.tools.smali.dexlib2.AccessFlags.PRIVATE.value or
+                com.android.tools.smali.dexlib2.AccessFlags.STATIC.value,
+            registerCount = 3,
+            body = """
+                :start
+                invoke-static {}, $FLAG_RUNTIME_TYPE->isAppendOnlyEnabled()Z
+                move-result v0
+                if-eqz v0, :commit
+                :end
+                .catch Ljava/lang/Throwable; {:start .. :end} :failed
+                goto :commit
+                :failed
+                move-exception v0
+                :commit
+                const/4 v0, 0x1
+                return v0
+            """,
+        )
+        val helper = host.methods.single { it.name == "safeCommit" }
+        val impl = helper.implementation!!
+        assertEquals(1, impl.tryBlocks.size)
+        val handler = impl.tryBlocks.single().exceptionHandlers.single()
+        assertEquals("Ljava/lang/Throwable;", handler.exceptionType)
+        val moveExIndex = impl.instructions.indexOfFirst {
+            it.opcode == com.android.tools.smali.dexlib2.Opcode.MOVE_EXCEPTION
+        }
+        assertTrue("Expected move-exception instruction", moveExIndex > 0)
+        assertEquals(
+            impl.instructions[moveExIndex].location.codeAddress,
+            handler.handlerCodeAddress,
+        )
+    }
+
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
     }.newDocumentBuilder().parse(InputSource(StringReader(xml)))

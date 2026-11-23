@@ -214,13 +214,27 @@ internal fun installAgenticCtorStartupHook(targets: AgenticExtensionTargets) {
 
 private fun BytecodePatchContext.rewriteDynamicConfigClinit(state: RamblerPatchRunState) {
     val configClass = mutableClassDefBy(DYNAMIC_CONFIG_TYPE)
-    val clinit = configClass.methods.firstOrNull { it.name == "<clinit>" }
-        ?: throw PatchException("$DYNAMIC_CONFIG_TYPE is missing <clinit>")
+    rewriteDynamicConfigClinitOnClass(configClass, state)
+}
 
-    val existingCount = clinit.implementation?.instructions?.size ?: 0
-    if (existingCount > 0) {
-        clinit.removeInstructions(0, existingCount)
-    }
+internal fun rewriteDynamicConfigClinitOnClass(
+    configClass: MutableClass,
+    state: RamblerPatchRunState,
+) {
+    // D8 folds static constant initializers into DEX static_values and may emit a 0-register
+    // <clinit> (or omit <clinit> entirely). Replacing it with a fresh MutableMethodImplementation
+    // guarantees registerCount >= 1 so ART never rejects v0 with VerifyError (0 >= 0).
+    configClass.methods.removeAll { it.name == "<clinit>" }
+    val clinit = ImmutableMethod(
+        configClass.type,
+        "<clinit>",
+        emptyList(),
+        "V",
+        AccessFlags.STATIC.value or AccessFlags.CONSTRUCTOR.value,
+        emptySet(),
+        emptySet(),
+        MutableMethodImplementation(2),
+    ).toMutable()
 
     val sb = StringBuilder()
 
@@ -298,6 +312,7 @@ private fun BytecodePatchContext.rewriteDynamicConfigClinit(state: RamblerPatchR
 
     sb.appendLine("return-void")
     clinit.addInstructions(0, sb.toString().trimIndent())
+    configClass.methods.add(clinit)
 }
 
 internal fun MutableClass.addHelperMethodIfMissing(
@@ -311,6 +326,7 @@ internal fun MutableClass.addHelperMethodIfMissing(
     if (methods.any { it.name == name && it.parameterTypes.map { p -> p.toString() } == parameterTypes && it.returnType == returnType }) {
         return
     }
+    val trimmedBody = body.trimIndent()
     val params = parameterTypes.map { ImmutableMethodParameter(it, emptySet(), null) }
     val method = ImmutableMethod(
         type,
@@ -322,8 +338,59 @@ internal fun MutableClass.addHelperMethodIfMissing(
         emptySet(),
         MutableMethodImplementation(registerCount),
     ).toMutable()
-    method.addInstructions(0, body)
+    method.addInstructions(0, trimmedBody)
+    method.retainHelperExceptionMetadata(trimmedBody)
     methods.add(method)
+}
+
+private fun MutableMethod.retainHelperExceptionMetadata(body: String) {
+    val lines = body.lineSequence().map { it.substringBefore('#').trim() }.toList()
+    val catchLines = lines.filter { it.startsWith(".catch") }
+    if (catchLines.isEmpty()) return
+    val pattern = Regex(
+        """^\.catch(?:(all)|\s+(L[^;]+;))\s+\{(:[^\s}]+)\s+\.\.\s+(:[^\s}]+)\}\s+(:[^\s]+)$""",
+    )
+    val catches = catchLines.map { line ->
+        checkNotNull(pattern.matchEntire(line)) { "Unsupported helper catch directive: $line" }
+    }
+    val labels = mutableMapOf<String, Int>()
+    var instructionCount = 0
+    lines.forEach { line ->
+        when {
+            line.isEmpty() -> Unit
+            line.startsWith(':') -> {
+                check(labels.put(line, instructionCount) == null) { "Duplicate helper label: $line" }
+            }
+            line.startsWith('.') -> check(
+                !line.startsWith(".packed-switch") && !line.startsWith(".sparse-switch") &&
+                    !line.startsWith(".array-data"),
+            ) { "Catch-bearing helper payloads require full-method assembly" }
+            else -> instructionCount++
+        }
+    }
+    val code = checkNotNull(implementation)
+    check(instructionCount == code.instructions.size) {
+        "Helper catch label/instruction layout drift: $definingClass->$name"
+    }
+    check(code.tryBlocks.isEmpty()) { "Helper assembler already supplied exception metadata" }
+    catches.forEach { match ->
+        fun index(group: Int): Int = checkNotNull(labels[match.groupValues[group]]) {
+            "Undefined helper catch label: ${match.groupValues[group]}"
+        }
+        val start = index(3)
+        val end = index(4)
+        val handler = index(5)
+        check(start < end && end <= instructionCount && handler < instructionCount) {
+            "Invalid helper exception range: $definingClass->$name"
+        }
+        val exceptionType = match.groupValues[2].takeIf(String::isNotEmpty)
+        code.addCatch(
+            exceptionType,
+            code.newLabelForIndex(start),
+            code.newLabelForIndex(end),
+            code.newLabelForIndex(handler),
+        )
+    }
 }
 
 internal const val CUSTOM_INSTRUCTION_PREF_KEY = "pref_key_rambler_custom_instruction"
