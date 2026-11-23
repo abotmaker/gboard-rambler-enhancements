@@ -269,13 +269,16 @@ internal object RamblerDynamicResolver {
             ?: throw PatchException("Could not identify snapshot field register in ${flagClass.type}->${recomputeMethod.name}")
 
         // The convergence block after the loop runs `const/4 ...` then `if-eqz vSnapshot, ...`
-        // before comparing `vPrev` and `vResolved`. Inserting right at `if-eqz vSnapshot` executes
-        // on EVERY loop exit path (both break-on-match and loop-exhausted-null).
-        val insertIndex = (arrayLoadIndex + 1 until equalsIndex).lastOrNull { idx ->
-            val insn = instructions[idx]
-            insn.opcode == Opcode.IF_EQZ &&
-                (insn as? OneRegisterInstruction)?.registerA == snapshotReg
-        } ?: throw PatchException(
+        // (checking `if (okrVar != null)`) before comparing `vPrev` and `vResolved`. Inserting right
+        // at the FIRST `if-eqz vSnapshot` after `arrayLoadIndex` executes on EVERY loop exit path
+        // (including first-time creation when `okrVar == null`!). Using `lastOrNull` would falsely
+        // match a later `if-eqz` after R8 reuses `vSnapshot` for `this.e` inside `if (okrVar != null)`.
+        val insertIndex = findPostLoopSnapshotCheckIndex(
+            instructions = instructions,
+            arrayLoadIndex = arrayLoadIndex,
+            equalsIndex = equalsIndex,
+            snapshotReg = snapshotReg,
+        ) ?: throw PatchException(
             "Could not locate post-loop snapshot check in ${flagClass.type}->${recomputeMethod.name}",
         )
 
@@ -295,6 +298,30 @@ internal object RamblerDynamicResolver {
             resolvedValueRegister = resolvedValueReg,
             insertIndex = insertIndex,
         )
+    }
+
+    internal fun findPostLoopSnapshotCheckIndex(
+        instructions: List<Instruction>,
+        arrayLoadIndex: Int,
+        equalsIndex: Int,
+        snapshotReg: Int,
+    ): Int? {
+        for (idx in (arrayLoadIndex + 1) until equalsIndex) {
+            val insn = instructions[idx]
+            if (insn.opcode == Opcode.IF_EQZ &&
+                (insn as? OneRegisterInstruction)?.registerA == snapshotReg
+            ) {
+                return idx
+            }
+            // Stop if snapshotReg is overwritten before we hit its post-loop null check.
+            if (insn is OneRegisterInstruction &&
+                insn.opcode.setsRegister() &&
+                insn.registerA == snapshotReg
+            ) {
+                return null
+            }
+        }
+        return null
     }
 
     private fun findFlagNotifyMethod(flagClass: MutableClass, recomputeName: String): String? {

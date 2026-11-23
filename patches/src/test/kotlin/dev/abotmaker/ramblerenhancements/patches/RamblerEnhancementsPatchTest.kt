@@ -231,6 +231,66 @@ class RamblerEnhancementsPatchTest {
         )
     }
 
+    @Test
+    fun flagHookInsertionTargetsFirstPostLoopSnapshotCheckBeforeBranchReusesV0() {
+        val dummyField = com.android.tools.smali.dexlib2.immutable.reference.ImmutableFieldReference(
+            "Loki;",
+            "e",
+            "Z",
+        )
+        val instructions = listOf(
+            // 0: arrayLoadIndex (aget-object v8, v8, v7)
+            com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction23x(
+                com.android.tools.smali.dexlib2.Opcode.AGET_OBJECT,
+                8,
+                8,
+                7,
+            ),
+            // 1: if-eqz v8, +4
+            com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction21t(
+                com.android.tools.smali.dexlib2.Opcode.IF_EQZ,
+                8,
+                4,
+            ),
+            // 2: const/4 v5, 1
+            com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction11n(
+                com.android.tools.smali.dexlib2.Opcode.CONST_4,
+                5,
+                1,
+            ),
+            // 3: FIRST if-eqz v0 (if (okrVar != null)) -> MUST select this index!
+            com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction21t(
+                com.android.tools.smali.dexlib2.Opcode.IF_EQZ,
+                0,
+                10,
+            ),
+            // 4: iget-boolean v0, v10, Loki;.e:Z (reuses v0 inside okrVar != null branch)
+            com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction22c(
+                com.android.tools.smali.dexlib2.Opcode.IGET_BOOLEAN,
+                0,
+                10,
+                dummyField,
+            ),
+            // 5: SECOND if-eqz v0 (if (this.e)) -> MUST NOT select this!
+            com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction21t(
+                com.android.tools.smali.dexlib2.Opcode.IF_EQZ,
+                0,
+                4,
+            ),
+            // 6: placeholder equalsIndex
+            com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction10x(
+                com.android.tools.smali.dexlib2.Opcode.NOP,
+            ),
+        )
+        val chosen = RamblerDynamicResolver.findPostLoopSnapshotCheckIndex(
+            instructions = instructions,
+            arrayLoadIndex = 0,
+            equalsIndex = 6,
+            snapshotReg = 0,
+        )
+        assertEquals(3, chosen)
+    }
+
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
     }.newDocumentBuilder().parse(InputSource(StringReader(xml)))

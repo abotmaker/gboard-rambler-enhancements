@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.3](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.2...v1.1.3) (2026-11-23)
+
+### 🐛 Bug Fixes
+
+* **Apply Rambler flag overrides on initial flag creation (`oki.x()`):** Insert `RamblerFlagRuntime.applyResolvedFlag(...)` before the **first** post-loop `if-eqz vSnapshot` check (`if (okrVar != null)`) instead of matching a later `if-eqz` where R8 reused `v0` for `this.e`. Previously, default-only flags (`agentic_dictation_enable_custom_instruction`, `enable_user_feature_cache`, `show_rambler_dict_settings`, `jetson_enable_cursor_awareness`, `agentic_dictation_enable_app_info_context`) skipped the hook when initialized for the first time (`okrVar == null`), preventing Custom Instructions, MUSE_STATS Personal Dictionary / Contact Names, Cursor-Aware Editing, and App Context from activating at runtime.
+
 ## [1.1.2](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.1...v1.1.2) (2026-11-23)
 
 ### 🐛 Bug Fixes
