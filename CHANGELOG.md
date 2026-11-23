@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.3...v1.1.4) (2026-11-23)
+
+### ✨ Improvements
+
+* **Gboard:** Show **Gboard Rambler Enhancements** directly inside Morphe Manager's **Need help finding the APK?** picker (`18.5.4.993608717-release-arm64-v8a` stable + `18.8.0.1022711984-beta-arm64-v8a` experimental).
+* **Gboard:** Make the bundle a single-app Gboard source (`com.google.android.inputmethod.latin`) so Morphe Manager automatically shows the **Updated / Repatch** indicator and changelog on installed Gboard / GboardWu builds whenever a new release ships.
+
 ## [1.1.3](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.2...v1.1.3) (2026-11-23)
 
 ### 🐛 Bug Fixes

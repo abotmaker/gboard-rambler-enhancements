@@ -24,27 +24,22 @@ import org.w3c.dom.Element
 import java.util.WeakHashMap
 
 internal const val GBOARD_PACKAGE = "com.google.android.inputmethod.latin"
-internal const val GBOARD_WU_PACKAGE = "dev.jason.com.google.android.inputmethod.latin"
 internal const val VERIFIED_GBOARD_VERSION = "18.5.4.993608717-release-arm64-v8a"
+internal const val EXPERIMENTAL_GBOARD_VERSION = "18.8.0.1022711984-beta-arm64-v8a"
 internal val COMPATIBILITY_GBOARD = Compatibility(
     name = "Gboard",
     packageName = GBOARD_PACKAGE,
     appIconColor = 0x1A73E8,
     targets = listOf(
         AppTarget(
-            version = null,
-            description = "Verified on Gboard $VERIFIED_GBOARD_VERSION (current GboardWu target); newer/other versions are best-effort and unverified.",
+            version = VERIFIED_GBOARD_VERSION,
+            isExperimental = false,
+            description = "Verified target (works alongside Gboard Patches / GboardWu).",
         ),
-    ),
-)
-internal val COMPATIBILITY_GBOARD_WU = Compatibility(
-    name = "Gboard (GboardWu)",
-    packageName = GBOARD_WU_PACKAGE,
-    appIconColor = 0x1A73E8,
-    targets = listOf(
         AppTarget(
-            version = null,
-            description = "Also supports patching an already-renamed GboardWu APK.",
+            version = EXPERIMENTAL_GBOARD_VERSION,
+            isExperimental = true,
+            description = "Experimental standalone target (without Gboard Patches).",
         ),
     ),
 )
@@ -98,7 +93,7 @@ internal object RamblerPatchStateStore {
 internal val ramblerSharedExtensionPatch = bytecodePatch(
     description = "Attach Rambler Enhancements runtime extension and wire dynamically fingerprinted bindings.",
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     extendWith("extensions/rambler-enhancements.rve")
 
     execute { }
@@ -416,7 +411,7 @@ internal object RamblerResourceStateStore {
 internal val ramblerSharedSettingsResourcePatch = resourcePatch(
     description = "Register standalone Rambler Enhancements settings Activity and inject exhaustive Rambler voice typing & Voice typing settings controls.",
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
 
     execute { }
 
@@ -513,7 +508,7 @@ private fun ramblerFeatureSelectionResourcePatch(
     feature: RamblerFeature,
     description: String,
 ) = resourcePatch(description = description) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     dependsOn(ramblerSharedSettingsResourcePatch)
 
     execute {

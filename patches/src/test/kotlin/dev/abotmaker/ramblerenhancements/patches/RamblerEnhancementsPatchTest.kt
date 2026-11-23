@@ -9,7 +9,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 class RamblerEnhancementsPatchTest {
     @Test
-    fun catalogPublishesAllSixUnpinnedRamblerPatches() {
+    fun catalogPublishesAllSixSingleAppGboardRamblerPatches() {
         val patches = PatchCatalog.morpheRegistrations
         assertEquals(6, patches.size)
         val names = patches.mapNotNull { it.name }.toSet()
@@ -25,12 +25,20 @@ class RamblerEnhancementsPatchTest {
             names,
         )
         for (patch in patches) {
-            val gboardCompat = patch.compatibility?.firstOrNull { it.packageName == GBOARD_PACKAGE }
-            assertTrue("Expected $GBOARD_PACKAGE compatibility on ${patch.name}", gboardCompat != null)
-            val targets = gboardCompat!!.targets
+            // Single-app bundle (only com.google.android.inputmethod.latin) ensures Morphe Manager
+            // recognizes it via soleAppByUid and displays "Update available / Repatch" badges on
+            // Gboard whenever a new release ships, and named targets expose it in "Need help finding the APK?".
+            assertEquals(1, patch.compatibility?.size)
+            val gboardCompat = patch.compatibility!!.single()
+            assertEquals(GBOARD_PACKAGE, gboardCompat.packageName)
+            val targets = gboardCompat.targets
             assertTrue(
-                "Patch ${patch.name} should use an unpinned wildcard AppTarget(version = null) so Morphe allows 18.5.4 and newer versions",
-                targets.size == 1 && targets.single().version == null,
+                "Patch ${patch.name} should declare stable verified target $VERIFIED_GBOARD_VERSION",
+                targets.any { it.version == VERIFIED_GBOARD_VERSION && !it.isExperimental },
+            )
+            assertTrue(
+                "Patch ${patch.name} should declare experimental target $EXPERIMENTAL_GBOARD_VERSION",
+                targets.any { it.version == EXPERIMENTAL_GBOARD_VERSION && it.isExperimental },
             )
             assertTrue(
                 "Patch ${patch.name} description should note verified 18.5.4 + unverified newer builds",

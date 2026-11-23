@@ -24,7 +24,7 @@ val ramblerWaveformAnimationPatch = bytecodePatch(
         "Works alongside upstream GboardWu (requires Advanced Voice Typing in GboardWu). $VERSION_NOTE",
     default = true,
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     dependsOn(
         ramblerSharedExtensionPatch,
         ramblerSharedSettingsResourcePatch,
@@ -85,7 +85,7 @@ val ramblerCustomInstructionsPatch = bytecodePatch(
     description = "Enables persistent custom style/formatting instructions for Gboard Rambler (credited to nl-morphe-patches) and exposes them in Gboard Settings -> Voice typing -> Rambler voice typing and Rambler Enhancements. $VERSION_NOTE",
     default = true,
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     dependsOn(
         ramblerSharedExtensionPatch,
         ramblerSharedSettingsResourcePatch,
@@ -103,7 +103,7 @@ val ramblerPersonalDictionaryPatch = bytecodePatch(
     description = "Enables Gboard Rambler's UserFeatureCache MUSE_STATS personal voice dictionary (credited to nl-morphe-patches) with a live Use dictionary words toggle plus add, import/export (.txt), remove, and clear controls. $VERSION_NOTE",
     default = true,
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     dependsOn(
         ramblerSharedExtensionPatch,
         ramblerSharedSettingsResourcePatch,
@@ -121,7 +121,7 @@ val ramblerContactNamesPatch = bytecodePatch(
     description = "Seeds up to 1,000 phone contact names into Rambler's MUSE_STATS voice dictionary (credited to nl-morphe-patches) when Contacts permission is granted, plus manual sync and reset controls. $VERSION_NOTE",
     default = true,
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     dependsOn(
         ramblerPersonalDictionaryPatch,
         ramblerSharedExtensionPatch,
@@ -140,7 +140,7 @@ val ramblerCursorEditingPatch = bytecodePatch(
     description = "Enables cursor-aware editing, selected-text-only spoken edits, post-edit reselection (credited to nl-morphe-patches), and a live Append-only dictation toggle with clean cursor-boundary spacing. $VERSION_NOTE",
     default = true,
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     dependsOn(
         ramblerSharedExtensionPatch,
         ramblerSharedSettingsResourcePatch,
@@ -208,7 +208,7 @@ val ramblerAppContextPatch = bytecodePatch(
     description = "Enables sharing the active app name, input type, and field hint with Gboard Rambler (credited to nl-morphe-patches) with a live toggle in Rambler Enhancements. $VERSION_NOTE",
     default = true,
 ) {
-    compatibleWith(COMPATIBILITY_GBOARD, COMPATIBILITY_GBOARD_WU)
+    compatibleWith(COMPATIBILITY_GBOARD)
     dependsOn(
         ramblerSharedExtensionPatch,
         ramblerSharedSettingsResourcePatch,
