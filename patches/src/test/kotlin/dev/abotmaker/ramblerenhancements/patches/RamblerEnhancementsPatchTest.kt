@@ -83,36 +83,33 @@ class RamblerEnhancementsPatchTest {
         injectExhaustiveJetsonVoicePreferences(screen, allFeatures)
         injectExhaustiveJetsonVoicePreferences(screen, allFeatures)
 
-        // Custom instructions + Per-app custom instructions are placed first, Help and feedback stays last.
+        // Instructions & app rules is placed first; single Rambler Enhancements category sits above Help and feedback.
         val topChildren = screen.documentElement.childElements()
         assertEquals(
-            CUSTOM_INSTRUCTION_PREF_KEY,
-            topChildren.first().childElements("EditTextPreference").single().androidAttr("key"),
-        )
-        assertEquals(
-            "rambler_enh_per_app_custom_instruction_entry",
+            "rambler_enh_custom_instructions_entry",
             topChildren.first().childElements("Preference").single().androidAttr("key"),
         )
         assertEquals(
             "pref_key_jetson_feedback",
             topChildren.last().childElements("Preference").single().androidAttr("key"),
         )
-        assertEquals(1, screen.getElementsByTagName("EditTextPreference").length)
-        assertEquals(6, screen.getElementsByTagName("SwitchPreferenceCompat").length)
-        val switchKeys = (0 until screen.getElementsByTagName("SwitchPreferenceCompat").length).map { idx ->
-            (screen.getElementsByTagName("SwitchPreferenceCompat").item(idx) as org.w3c.dom.Element)
-                .androidAttr("key")
+        assertEquals(0, screen.getElementsByTagName("EditTextPreference").length)
+        assertEquals(0, screen.getElementsByTagName("SwitchPreferenceCompat").length)
+        val sections = (0 until screen.getElementsByTagName("extra").length).map { idx ->
+            (screen.getElementsByTagName("extra").item(idx) as org.w3c.dom.Element)
+                .androidAttr("value")
         }
         assertEquals(
             listOf(
-                USE_DICTIONARY_WORDS_PREF_KEY,
-                APPEND_ONLY_PREF_KEY,
-                CURSOR_EDITING_PREF_KEY,
-                RESELECT_AFTER_EDIT_PREF_KEY,
-                APP_CONTEXT_PREF_KEY,
-                AUTO_PARALLEL_RETRY_PREF_KEY,
+                "custom_instructions",
+                "waveform",
+                "behavior",
+                "productivity",
+                "dictionary",
+                "history",
+                "backup",
             ),
-            switchKeys,
+            sections,
         )
 
         // Partial selection only injects the chosen feature's rows (+ universal Backup entry).

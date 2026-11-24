@@ -543,55 +543,28 @@ internal val ramblerSharedSettingsResourcePatch = resourcePatch(
             "values" to listOf(
                 "rambler_enhancements_entry_title" to "Rambler Enhancements",
                 "rambler_enhancements_entry_summary" to
-                    "Hex waveform animations, custom instructions, voice dictionary, contacts, and dictation behavior",
-                "rambler_enh_custom_instruction_title" to "Custom instructions",
-                "rambler_enh_custom_instruction_summary" to
-                    "Default style rules applied to all apps unless overridden by Per-app rules (leave empty to use selected apps only)",
-                "rambler_enh_custom_instruction_hint" to
-                    "Default Rambler instructions. Leave empty if you only want Per-app rules to run.",
-                "rambler_enh_per_app_custom_instruction_title" to "Per-app custom instructions",
-                "rambler_enh_per_app_custom_instruction_summary" to
-                    "Apply custom instructions only to selected apps, create named app rules, or disable apps",
-                "rambler_enh_cat_waveform" to "Waveform",
+                    "Waveforms, instructions, dictation behavior, voice actions, dictionary, history, and backup",
+                "rambler_enh_pref_instructions_title" to "Instructions & app rules",
+                "rambler_enh_pref_instructions_summary" to
+                    "Default style prompt, per-app rules & behavior overrides, and disabled apps",
                 "rambler_enh_pref_waveform_title" to "Waveform animation (Hex)",
                 "rambler_enh_pref_waveform_summary" to
                     "Listening & processing animations, colors, and Hex tuning",
-                "rambler_enh_cat_dictionary_contacts" to "Voice dictionary & contacts",
-                "rambler_enh_pref_use_dict_title" to "Use dictionary words",
-                "rambler_enh_pref_use_dict_summary" to
-                    "Send your saved voice dictionary words with every Rambler request",
-                "rambler_enh_pref_manage_dict_title" to "Manage voice dictionary",
-                "rambler_enh_pref_manage_dict_summary" to
-                    "Add, import (.txt), export, remove, or clear MUSE_STATS biasing words",
-                "rambler_enh_pref_contacts_title" to "Contact names sync",
-                "rambler_enh_pref_contacts_summary" to
-                    "Seed phone contact names into Rambler's voice dictionary",
-                "rambler_enh_cat_behavior" to "Dictation behavior",
-                "rambler_enh_pref_append_only_title" to "Append-only dictation",
-                "rambler_enh_pref_append_only_summary" to
-                    "Insert new speech at the cursor without rewriting earlier text; selected text still edits normally",
-                "rambler_enh_pref_cursor_editing_title" to "Cursor-aware editing",
-                "rambler_enh_pref_cursor_editing_summary" to
-                    "Send text after the cursor and scope spoken edits to selected text",
-                "rambler_enh_pref_reselect_after_edit_title" to "Re-select after edit",
-                "rambler_enh_pref_reselect_after_edit_summary" to
-                    "Keep edited text highlighted for chained voice edits (off by default so follow-up dictations append cleanly)",
-                "rambler_enh_pref_app_context_title" to "App context",
-                "rambler_enh_pref_app_context_summary" to
-                    "Share active app name, input type, and field hint so Rambler adapts formatting",
-                "rambler_enh_pref_auto_retry_title" to "Auto parallel retry",
-                "rambler_enh_pref_auto_retry_summary" to
-                    "Buffer audio locally and silently retry dictation when Wi-Fi or 5G drops",
-                "rambler_enh_cat_productivity" to "Productivity tools",
-                "rambler_enh_pref_productivity_title" to "Voice snippets, replace & actions",
+                "rambler_enh_pref_behavior_title" to "Dictation & reliability",
+                "rambler_enh_pref_behavior_summary" to
+                    "Append-only, cursor editing, app context, trailing period, auto retry, and max duration",
+                "rambler_enh_pref_productivity_title" to "Voice actions, snippets & replace",
                 "rambler_enh_pref_productivity_summary" to
-                    "Hands-free voice send/search suffixes, text snippets, find & replace, and strip trailing period",
+                    "Hands-free send/search suffixes, voice snippets, and find & replace rules",
+                "rambler_enh_pref_dictionary_title" to "Voice dictionary & contacts",
+                "rambler_enh_pref_dictionary_summary" to
+                    "MUSE_STATS biasing words, import/export, and phone contact names sync",
                 "rambler_enh_pref_history_title" to "Dictation history",
                 "rambler_enh_pref_history_summary" to
                     "Search and copy your last 50 on-device Rambler dictations",
                 "rambler_enh_pref_backup_title" to "Backup & restore (.json)",
                 "rambler_enh_pref_backup_summary" to
-                    "Export or import all Rambler Enhancements settings, rules, snippets, and dictionary words",
+                    "Export or import all Rambler settings, rules, snippets, and dictionary words",
             ),
             "values-zh-rTW" to zhHantSettingsStrings(),
             "values-b+zh+Hant" to zhHantSettingsStrings(),
@@ -679,81 +652,47 @@ internal val ramblerProductivityToolsResourcePatch = ramblerFeatureSelectionReso
 
 private fun zhHantSettingsStrings(): List<Pair<String, String>> = listOf(
     "rambler_enhancements_entry_title" to "Rambler 增強功能",
-    "rambler_enhancements_entry_summary" to "Hex 聲波動畫、自訂指示、語音片語、歷史紀錄、語音辭典與聽寫行為設定",
-    "rambler_enh_custom_instruction_title" to "自訂指示",
-    "rambler_enh_custom_instruction_summary" to "未符合各應用程式規則時套用的預設風格規則（留空即可僅在指定應用程式生效）",
-    "rambler_enh_custom_instruction_hint" to "預設 Rambler 自訂指示；若只想套用於特定應用程式請留空。",
-    "rambler_enh_per_app_custom_instruction_title" to "各應用程式規則與指示",
-    "rambler_enh_per_app_custom_instruction_summary" to "為指定應用程式設定自訂指示、僅附加/情境/去句號覆寫或停用特定應用程式",
-    "rambler_enh_cat_waveform" to "聲波動畫",
+    "rambler_enhancements_entry_summary" to "聲波動畫、自訂指示、聽寫行為、語音動作、語音辭典、紀錄與備份",
+    "rambler_enh_pref_instructions_title" to "自訂指示與應用程式規則",
+    "rambler_enh_pref_instructions_summary" to "預設風格指示、各應用程式規則與行為覆寫，以及停用名單",
     "rambler_enh_pref_waveform_title" to "聲波動畫 (Hex)",
     "rambler_enh_pref_waveform_summary" to "聆聽與處理動畫、配色與 Hex 細節微調",
-    "rambler_enh_cat_dictionary_contacts" to "語音辭典與聯絡人",
-    "rambler_enh_pref_use_dict_title" to "使用語音辭典詞彙",
-    "rambler_enh_pref_use_dict_summary" to "每次 Rambler 語音輸入時一併傳送已儲存的語音辭典詞彙",
-    "rambler_enh_pref_manage_dict_title" to "管理語音辭典",
-    "rambler_enh_pref_manage_dict_summary" to "新增、匯入 (.txt)、匯出、移除或清除 MUSE_STATS 詞彙",
-    "rambler_enh_pref_contacts_title" to "聯絡人名稱同步",
-    "rambler_enh_pref_contacts_summary" to "將手機聯絡人名稱同步至 Rambler 語音辭典",
-    "rambler_enh_cat_behavior" to "聽寫行為",
-    "rambler_enh_pref_append_only_title" to "僅附加模式（不重寫前文）",
-    "rambler_enh_pref_append_only_summary" to "在游標處插入新語音而不重寫先前文字；有選取文字時仍可正常語音編輯",
-    "rambler_enh_pref_cursor_editing_title" to "游標感知編輯",
-    "rambler_enh_pref_cursor_editing_summary" to "傳送游標後的文字，並僅針對選取範圍套用語音編輯",
-    "rambler_enh_pref_reselect_after_edit_title" to "編輯後重新選取文字",
-    "rambler_enh_pref_reselect_after_edit_summary" to "語音編輯後保持選取以便連續修改（預設關閉，讓後續語音可順利附加）",
-    "rambler_enh_pref_app_context_title" to "應用程式情境",
-    "rambler_enh_pref_app_context_summary" to "傳送目前應用程式名稱與輸入欄位提示，讓 Rambler 依情境調整格式",
-    "rambler_enh_pref_auto_retry_title" to "弱網自動重試",
-    "rambler_enh_pref_auto_retry_summary" to "在本機快取音訊並在 Wi-Fi/5G 短暫中斷時靜默並發重試",
-    "rambler_enh_cat_productivity" to "效率工具",
-    "rambler_enh_pref_productivity_title" to "語音片語、取代與免手送出",
-    "rambler_enh_pref_productivity_summary" to "語音送出/搜尋後綴、固定片語展開、尋找取代與移除句尾句號",
+    "rambler_enh_pref_behavior_title" to "聽寫行為與連線穩定性",
+    "rambler_enh_pref_behavior_summary" to "僅附加、游標編輯、應用程式情境、去句號、弱網重試與最長時限",
+    "rambler_enh_pref_productivity_title" to "語音動作、片語與取代",
+    "rambler_enh_pref_productivity_summary" to "語音送出/搜尋後綴、固定語音片語與尋找取代規則",
+    "rambler_enh_pref_dictionary_title" to "語音辭典與聯絡人",
+    "rambler_enh_pref_dictionary_summary" to "MUSE_STATS 詞彙管理、匯入/匯出與手機聯絡人同步",
     "rambler_enh_pref_history_title" to "本機聽寫紀錄",
     "rambler_enh_pref_history_summary" to "搜尋與複製最近 50 筆裝置本機 Rambler 聽寫內容",
     "rambler_enh_pref_backup_title" to "備份與還原 (.json)",
-    "rambler_enh_pref_backup_summary" to "匯出或匯入所有 Rambler 增強設定、規則、片語與語音辭典詞彙",
+    "rambler_enh_pref_backup_summary" to "匯出或匯入所有 Rambler 設定、規則、片語與語音辭典詞彙",
 )
 
 internal fun addCustomInstructionPrefIdempotently(screenDoc: Document) {
+    if (screenDoc.hasPreferenceKey("rambler_enh_custom_instructions_entry")) return
     val root = screenDoc.documentElement
     val categoryTag = root.preferredCategoryTag()
-    val existingField = screenDoc.findPreferenceElementByKey(CUSTOM_INSTRUCTION_PREF_KEY)
-    val category: Element
-    if (existingField != null && existingField.parentNode is Element) {
-        category = existingField.parentNode as Element
-    } else {
-        category = screenDoc.createElement(categoryTag)
-        val field = screenDoc.createElement("EditTextPreference").apply {
-            setAndroidAttr("key", CUSTOM_INSTRUCTION_PREF_KEY)
-            setAndroidAttr("persistent", "true")
-            setAndroidAttr("defaultValue", "")
-            setAndroidAttr("title", "@string/rambler_enh_custom_instruction_title")
-            setAndroidAttr("summary", "@string/rambler_enh_custom_instruction_summary")
-            setAndroidAttr("dialogTitle", "@string/rambler_enh_custom_instruction_title")
-            setAndroidAttr("dialogMessage", "@string/rambler_enh_custom_instruction_hint")
-        }
-        category.appendChild(field)
-        root.insertBefore(category, root.firstChild)
+    val category = screenDoc.createElement(categoryTag).apply {
+        setAndroidAttr("key", "rambler_enh_cat_instructions")
     }
-    if (!screenDoc.hasPreferenceKey("rambler_enh_per_app_custom_instruction_entry")) {
-        val perAppPref = screenDoc.createElement("Preference").apply {
-            setAndroidAttr("key", "rambler_enh_per_app_custom_instruction_entry")
-            setAndroidAttr("persistent", "false")
-            setAndroidAttr("title", "@string/rambler_enh_per_app_custom_instruction_title")
-            setAndroidAttr("summary", "@string/rambler_enh_per_app_custom_instruction_summary")
-        }
-        val intent = screenDoc.createElement("intent").apply {
-            setAndroidAttr("action", OPEN_SETTINGS_ACTION)
-        }
-        val extra = screenDoc.createElement("extra").apply {
-            setAndroidAttr("name", "section")
-            setAndroidAttr("value", "custom_instructions")
-        }
-        intent.appendChild(extra)
-        perAppPref.appendChild(intent)
-        category.appendChild(perAppPref)
+    val pref = screenDoc.createElement("Preference").apply {
+        setAndroidAttr("key", "rambler_enh_custom_instructions_entry")
+        setAndroidAttr("persistent", "false")
+        setAndroidAttr("title", "@string/rambler_enh_pref_instructions_title")
+        setAndroidAttr("summary", "@string/rambler_enh_pref_instructions_summary")
     }
+    val intent = screenDoc.createElement("intent").apply {
+        setAndroidAttr("action", OPEN_SETTINGS_ACTION)
+    }
+    val extra = screenDoc.createElement("extra").apply {
+        setAndroidAttr("name", "section")
+        setAndroidAttr("value", "custom_instructions")
+    }
+    intent.appendChild(extra)
+    pref.appendChild(intent)
+    category.appendChild(pref)
+    root.insertBefore(category, root.firstChild)
 }
 
 internal fun injectExhaustiveJetsonVoicePreferences(
@@ -767,27 +706,13 @@ internal fun injectExhaustiveJetsonVoicePreferences(
 
     val root = screenDoc.documentElement
     val categoryTag = root.preferredCategoryTag()
-    // Place our categories above Gboard's trailing Help & feedback PreferenceCategory.
+    // Place our single clean category above Gboard's trailing Help & feedback PreferenceCategory.
     val anchor = root.childElements()
         .lastOrNull { el ->
             el.tagName.endsWith("PreferenceCategory") &&
-                !el.containsPreferenceKey(CUSTOM_INSTRUCTION_PREF_KEY) &&
+                !el.containsPreferenceKey("rambler_enh_custom_instructions_entry") &&
                 el.androidAttr("key")?.startsWith("rambler_enh_cat_") != true
         }
-
-    fun insertCategory(categoryKey: String, titleRes: String, rows: List<Element>) {
-        if (rows.isEmpty() || screenDoc.hasPreferenceKey(categoryKey)) return
-        val category = screenDoc.createElement(categoryTag).apply {
-            setAndroidAttr("key", categoryKey)
-            setAndroidAttr("title", titleRes)
-        }
-        rows.forEach(category::appendChild)
-        if (anchor != null) {
-            root.insertBefore(category, anchor)
-        } else {
-            root.appendChild(category)
-        }
-    }
 
     fun sectionIntentPreference(
         key: String,
@@ -814,141 +739,70 @@ internal fun injectExhaustiveJetsonVoicePreferences(
         return pref
     }
 
-    fun switchPreference(
-        key: String,
-        defaultValue: Boolean,
-        titleRes: String,
-        summaryRes: String,
-    ): Element? {
-        if (screenDoc.hasPreferenceKey(key)) return null
-        return screenDoc.createElement("SwitchPreferenceCompat").apply {
-            setAndroidAttr("key", key)
-            setAndroidAttr("persistent", "true")
-            setAndroidAttr("defaultValue", defaultValue.toString())
-            setAndroidAttr("title", titleRes)
-            setAndroidAttr("summary", summaryRes)
-        }
-    }
+    val categoryKey = "rambler_enh_cat_enhancements"
+    if (screenDoc.hasPreferenceKey(categoryKey)) return
 
+    val rows = mutableListOf<Element>()
     if (RamblerFeature.WAVEFORM in selected) {
-        val rows = listOfNotNull(
-            sectionIntentPreference(
-                key = "rambler_enh_waveform_entry",
-                titleRes = "@string/rambler_enh_pref_waveform_title",
-                summaryRes = "@string/rambler_enh_pref_waveform_summary",
-                section = "waveform",
-            ),
-        )
-        insertCategory("rambler_enh_cat_waveform", "@string/rambler_enh_cat_waveform", rows)
+        sectionIntentPreference(
+            key = "rambler_enh_waveform_entry",
+            titleRes = "@string/rambler_enh_pref_waveform_title",
+            summaryRes = "@string/rambler_enh_pref_waveform_summary",
+            section = "waveform",
+        )?.let(rows::add)
     }
-
-    if (RamblerFeature.PERSONAL_DICTIONARY in selected || RamblerFeature.CONTACT_NAMES in selected) {
-        val rows = mutableListOf<Element>()
-        if (RamblerFeature.PERSONAL_DICTIONARY in selected) {
-            switchPreference(
-                key = USE_DICTIONARY_WORDS_PREF_KEY,
-                defaultValue = true,
-                titleRes = "@string/rambler_enh_pref_use_dict_title",
-                summaryRes = "@string/rambler_enh_pref_use_dict_summary",
-            )?.let(rows::add)
-            sectionIntentPreference(
-                key = "rambler_enh_dictionary_entry",
-                titleRes = "@string/rambler_enh_pref_manage_dict_title",
-                summaryRes = "@string/rambler_enh_pref_manage_dict_summary",
-                section = "dictionary",
-            )?.let(rows::add)
-        }
-        if (RamblerFeature.CONTACT_NAMES in selected) {
-            sectionIntentPreference(
-                key = "rambler_enh_contacts_entry",
-                titleRes = "@string/rambler_enh_pref_contacts_title",
-                summaryRes = "@string/rambler_enh_pref_contacts_summary",
-                section = "contacts",
-            )?.let(rows::add)
-        }
-        insertCategory(
-            "rambler_enh_cat_dictionary_contacts",
-            "@string/rambler_enh_cat_dictionary_contacts",
-            rows,
-        )
-    }
-
     if (RamblerFeature.CURSOR_EDITING in selected ||
         RamblerFeature.APP_CONTEXT in selected ||
         RamblerFeature.PRODUCTIVITY_TOOLS in selected
     ) {
-        val rows = mutableListOf<Element>()
-        if (RamblerFeature.CURSOR_EDITING in selected) {
-            switchPreference(
-                key = APPEND_ONLY_PREF_KEY,
-                defaultValue = false,
-                titleRes = "@string/rambler_enh_pref_append_only_title",
-                summaryRes = "@string/rambler_enh_pref_append_only_summary",
-            )?.let(rows::add)
-            switchPreference(
-                key = CURSOR_EDITING_PREF_KEY,
-                defaultValue = true,
-                titleRes = "@string/rambler_enh_pref_cursor_editing_title",
-                summaryRes = "@string/rambler_enh_pref_cursor_editing_summary",
-            )?.let(rows::add)
-            switchPreference(
-                key = RESELECT_AFTER_EDIT_PREF_KEY,
-                defaultValue = false,
-                titleRes = "@string/rambler_enh_pref_reselect_after_edit_title",
-                summaryRes = "@string/rambler_enh_pref_reselect_after_edit_summary",
-            )?.let(rows::add)
-        }
-        if (RamblerFeature.APP_CONTEXT in selected) {
-            switchPreference(
-                key = APP_CONTEXT_PREF_KEY,
-                defaultValue = true,
-                titleRes = "@string/rambler_enh_pref_app_context_title",
-                summaryRes = "@string/rambler_enh_pref_app_context_summary",
-            )?.let(rows::add)
-        }
-        if (RamblerFeature.PRODUCTIVITY_TOOLS in selected) {
-            switchPreference(
-                key = AUTO_PARALLEL_RETRY_PREF_KEY,
-                defaultValue = false,
-                titleRes = "@string/rambler_enh_pref_auto_retry_title",
-                summaryRes = "@string/rambler_enh_pref_auto_retry_summary",
-            )?.let(rows::add)
-        }
-        insertCategory("rambler_enh_cat_behavior", "@string/rambler_enh_cat_behavior", rows)
+        sectionIntentPreference(
+            key = "rambler_enh_behavior_entry",
+            titleRes = "@string/rambler_enh_pref_behavior_title",
+            summaryRes = "@string/rambler_enh_pref_behavior_summary",
+            section = "behavior",
+        )?.let(rows::add)
     }
-
     if (RamblerFeature.PRODUCTIVITY_TOOLS in selected) {
-        val prodRows = listOfNotNull(
-            sectionIntentPreference(
-                key = "rambler_enh_productivity_entry",
-                titleRes = "@string/rambler_enh_pref_productivity_title",
-                summaryRes = "@string/rambler_enh_pref_productivity_summary",
-                section = "productivity",
-            ),
-            sectionIntentPreference(
-                key = "rambler_enh_history_entry",
-                titleRes = "@string/rambler_enh_pref_history_title",
-                summaryRes = "@string/rambler_enh_pref_history_summary",
-                section = "history",
-            ),
-            sectionIntentPreference(
-                key = "rambler_enh_backup_entry",
-                titleRes = "@string/rambler_enh_pref_backup_title",
-                summaryRes = "@string/rambler_enh_pref_backup_summary",
-                section = "backup",
-            ),
-        )
-        insertCategory("rambler_enh_cat_productivity", "@string/rambler_enh_cat_productivity", prodRows)
-    } else if (selected.isNotEmpty()) {
-        val backupRows = listOfNotNull(
-            sectionIntentPreference(
-                key = "rambler_enh_backup_entry",
-                titleRes = "@string/rambler_enh_pref_backup_title",
-                summaryRes = "@string/rambler_enh_pref_backup_summary",
-                section = "backup",
-            ),
-        )
-        insertCategory("rambler_enh_cat_productivity", "@string/rambler_enh_cat_productivity", backupRows)
+        sectionIntentPreference(
+            key = "rambler_enh_productivity_entry",
+            titleRes = "@string/rambler_enh_pref_productivity_title",
+            summaryRes = "@string/rambler_enh_pref_productivity_summary",
+            section = "productivity",
+        )?.let(rows::add)
+    }
+    if (RamblerFeature.PERSONAL_DICTIONARY in selected || RamblerFeature.CONTACT_NAMES in selected) {
+        sectionIntentPreference(
+            key = "rambler_enh_dictionary_entry",
+            titleRes = "@string/rambler_enh_pref_dictionary_title",
+            summaryRes = "@string/rambler_enh_pref_dictionary_summary",
+            section = "dictionary",
+        )?.let(rows::add)
+    }
+    if (RamblerFeature.PRODUCTIVITY_TOOLS in selected) {
+        sectionIntentPreference(
+            key = "rambler_enh_history_entry",
+            titleRes = "@string/rambler_enh_pref_history_title",
+            summaryRes = "@string/rambler_enh_pref_history_summary",
+            section = "history",
+        )?.let(rows::add)
+    }
+    sectionIntentPreference(
+        key = "rambler_enh_backup_entry",
+        titleRes = "@string/rambler_enh_pref_backup_title",
+        summaryRes = "@string/rambler_enh_pref_backup_summary",
+        section = "backup",
+    )?.let(rows::add)
+
+    if (rows.isEmpty()) return
+    val category = screenDoc.createElement(categoryTag).apply {
+        setAndroidAttr("key", categoryKey)
+        setAndroidAttr("title", "@string/rambler_enhancements_entry_title")
+    }
+    rows.forEach(category::appendChild)
+    if (anchor != null) {
+        root.insertBefore(category, anchor)
+    } else {
+        root.appendChild(category)
     }
 }
 

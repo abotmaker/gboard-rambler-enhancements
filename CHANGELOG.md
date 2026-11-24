@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.1](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.2.0...v1.2.1) (2026-11-24)
+
+### ✨ UX & Settings Refactor
+
+* **Zero-Duplication 7-Category Settings Hierarchy:**
+  * **Clean `Rambler voice typing` screen (17 rows → 7 focused entries):** Replaces duplicated inline toggles and overlapping `Custom instructions` / `Per-app custom instructions` rows with one clean **Instructions & app rules** row at the top and one **Rambler Enhancements** category (`Waveform animation (Hex)`, `Dictation & reliability`, `Voice actions, snippets & replace`, `Voice dictionary & contacts`, `Dictation history`, and `Backup & restore (.json)`).
+  * **Compact `Rambler Enhancements` Dashboard Hub (36-card scroll wall → 7 live-status cards):** Opening **Rambler Enhancements** now shows 7 concise at-a-glance status cards that drill into the exact same focused subpages.
+  * **Dictation & reliability subpage:** Brings **Strip trailing period** and **Max dictation duration** together with **Append-only**, **Cursor-aware editing**, **Re-select after edit**, **App context**, and **Auto parallel retry** in one logical place.
+  * **Streamlined subpages:**
+    * **Voice actions, snippets & replace:** Hides Send/Search trigger phrase editor rows when their toggle is OFF.
+    * **Voice dictionary & contacts:** Merged into one screen (10 cards → 5 compact rows) with a tappable searchable **Stored words** browser/remover, compact **Import / Export / Clear** action bar, and inline contact sync status (hides **Reset sync history** when 0 contacts are synced).
+    * **Dictation history:** Inline search bar, Clear all, and scrollable history list right on the page (1 tap to view, search, copy, or delete — no nested dialog).
+
 ## [1.2.0](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.1.8...v1.2.0) (2026-11-24)
 
 ### ✨ New Features

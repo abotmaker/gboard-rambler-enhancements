@@ -47,6 +47,10 @@ final class RamblerProductivityDialogs {
         void accept(int value);
     }
 
+    interface WordRemoveHandler {
+        void remove(String word, Runnable onRemoved);
+    }
+
     private static final int[] DURATION_PRESETS = {0, 120, 180, 300, 600, 900, 1800, -1};
     private static final String[] DURATION_LABELS = {
             "Gboard default",
@@ -527,7 +531,123 @@ final class RamblerProductivityDialogs {
                 .show();
     }
 
-    private static void copyToClipboard(Context context, String text) {
+    static void showWordBrowserDialog(
+            Activity activity,
+            List<String> initialWords,
+            WordRemoveHandler onRemove) {
+        RamblerWaveformDialogs.Palette pal = RamblerWaveformDialogs.palette(activity);
+        List<String> words = new ArrayList<String>(initialWords);
+        Collections.sort(words, String.CASE_INSENSITIVE_ORDER);
+
+        LinearLayout root = new LinearLayout(activity);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(activity, 16), dp(activity, 10), dp(activity, 16), dp(activity, 4));
+
+        EditText searchInput = new EditText(activity);
+        searchInput.setHint("Search " + words.size() + " stored words…");
+        searchInput.setSingleLine(true);
+        searchInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        root.addView(searchInput, matchWrap());
+
+        TextView hintView = new TextView(activity);
+        hintView.setText("Tap Remove next to any word to delete it from MUSE_STATS.");
+        hintView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        hintView.setTextColor(pal.secondary);
+        LinearLayout.LayoutParams hintParams = matchWrap();
+        hintParams.topMargin = dp(activity, 4);
+        hintParams.bottomMargin = dp(activity, 8);
+        root.addView(hintView, hintParams);
+
+        ScrollView scroll = new ScrollView(activity);
+        LinearLayout listBox = new LinearLayout(activity);
+        listBox.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(listBox, matchWrap());
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 340)));
+
+        final AlertDialog[] dialogRef = new AlertDialog[1];
+        Runnable[] rebuildRef = new Runnable[1];
+        rebuildRef[0] = () -> {
+            String query = searchInput.getText() == null
+                    ? ""
+                    : searchInput.getText().toString().trim().toLowerCase(Locale.ROOT);
+            listBox.removeAllViews();
+            int shown = 0;
+            for (String word : words) {
+                if (!query.isEmpty() && !word.toLowerCase(Locale.ROOT).contains(query)) {
+                    continue;
+                }
+                shown++;
+                LinearLayout row = new LinearLayout(activity);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dp(activity, 12), dp(activity, 9), dp(activity, 12), dp(activity, 9));
+                row.setBackground(RamblerWaveformDialogs.tileBackground(activity, false));
+
+                TextView label = new TextView(activity);
+                label.setText(word);
+                label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                label.setTextColor(pal.primary);
+                row.addView(label, new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+
+                TextView removeBtn = new TextView(activity);
+                removeBtn.setText("Remove");
+                removeBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+                removeBtn.setTypeface(Typeface.DEFAULT_BOLD);
+                removeBtn.setTextColor(pal.accent);
+                removeBtn.setPadding(dp(activity, 10), dp(activity, 4), dp(activity, 2), dp(activity, 4));
+                removeBtn.setClickable(true);
+                removeBtn.setFocusable(true);
+                removeBtn.setOnClickListener(v -> onRemove.remove(word, () -> {
+                    words.remove(word);
+                    if (dialogRef[0] != null) {
+                        dialogRef[0].setTitle("Stored words (" + words.size() + ")");
+                    }
+                    rebuildRef[0].run();
+                }));
+                row.addView(removeBtn);
+
+                LinearLayout.LayoutParams rowParams = matchWrap();
+                rowParams.bottomMargin = dp(activity, 6);
+                listBox.addView(row, rowParams);
+            }
+            if (shown == 0) {
+                TextView empty = new TextView(activity);
+                empty.setText(words.isEmpty() ? "No words stored." : "No matching words.");
+                empty.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+                empty.setTextColor(pal.secondary);
+                empty.setPadding(dp(activity, 4), dp(activity, 14), dp(activity, 4), dp(activity, 14));
+                listBox.addView(empty);
+            }
+        };
+
+        searchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                rebuildRef[0].run();
+            }
+        });
+        rebuildRef[0].run();
+
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setTitle("Stored words (" + words.size() + ")")
+                .setView(root)
+                .setPositiveButton("Done", null)
+                .create();
+        dialogRef[0] = dialog;
+        dialog.show();
+    }
+
+    static void copyToClipboard(Context context, String text) {
         try {
             ClipboardManager cm =
                     (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);

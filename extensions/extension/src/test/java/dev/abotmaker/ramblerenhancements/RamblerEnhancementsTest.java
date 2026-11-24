@@ -752,6 +752,30 @@ public final class RamblerEnhancementsTest {
         assertEquals(Arrays.asList("Morphe", "GboardWu"), fakeDictWords);
     }
 
+    @Test
+    public void settingsHubAndSectionNormalizationAvoidDuplication() {
+        assertEquals(RamblerEnhancementsActivity.SECTION_DICTIONARY,
+                RamblerEnhancementsActivity.normalizeSection(
+                        RamblerEnhancementsActivity.SECTION_CONTACTS));
+        assertEquals(RamblerEnhancementsActivity.SECTION_BEHAVIOR,
+                RamblerEnhancementsActivity.normalizeSection(
+                        RamblerEnhancementsActivity.SECTION_BEHAVIOR));
+        assertNull(RamblerEnhancementsActivity.normalizeSection(""));
+        assertNull(RamblerEnhancementsActivity.normalizeSection("unknown"));
+
+        assertEquals("Rambler Enhancements",
+                RamblerEnhancementsActivity.titleForSection(null));
+        assertEquals("Instructions & app rules",
+                RamblerEnhancementsActivity.titleForSection(
+                        RamblerEnhancementsActivity.SECTION_CUSTOM_INSTRUCTIONS));
+        assertEquals("Dictation & reliability",
+                RamblerEnhancementsActivity.titleForSection(
+                        RamblerEnhancementsActivity.SECTION_BEHAVIOR));
+        assertEquals("Voice dictionary & contacts",
+                RamblerEnhancementsActivity.titleForSection(
+                        RamblerEnhancementsActivity.SECTION_CONTACTS));
+    }
+
     @SuppressWarnings("unused")
     public static final class FakePcn {
         final android.view.inputmethod.EditorInfo editorInfo;
