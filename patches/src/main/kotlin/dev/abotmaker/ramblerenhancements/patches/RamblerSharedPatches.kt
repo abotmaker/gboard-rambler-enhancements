@@ -645,6 +645,7 @@ internal fun rewriteDynamicConfigClinitOnClass(
     // Spacebar long-press -> Rambler trigger bindings (resolved or 18.5.4 defaults)
     val sp = state.spacebarTriggerTargets
     putStr("SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD", sp?.eventGetKeyDataMethod ?: "g")
+    putStr("SPACEBAR_LP_EVENT_ACTION_FIELD", sp?.eventActionField ?: "a")
     putStr("SPACEBAR_LP_KEYDATA_CODE_FIELD", sp?.keyDataCodeField ?: "c")
     putStr("SPACEBAR_LP_KEYDATA_DATA_FIELD", sp?.keyDataDataField ?: "e")
     putStr("SPACEBAR_LP_EXT_GET_CONTEXT_METHOD", sp?.extGetContextMethod ?: "ac")

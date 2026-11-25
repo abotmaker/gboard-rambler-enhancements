@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.1](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.0...v1.3.1) (2026-11-25)
+
+### 🐛 Bug Fixes
+
+* **Long-press Spacebar when Cursor Trackpad (`free_cursor`) is enabled:**
+  * Gboard's Spacebar softkey XML switches stationary Spacebar long-press from `SHOW_SYSTEM_IME_PICKER (-10022, "space")` to `SWITCH_KEYBOARD (-10004, "free_cursor", LONG_PRESS)` whenever Cursor Trackpad (`free_cursor` + `enable_scrub_move` + default-on `enable_free_cursor_by_long_press_space`) is enabled (including via GboardWu's Cursor Trackpad patch).
+  * `RamblerSpacebarTrigger` now intercepts **both** stock Spacebar long-press (`-10022, "space"`) and Cursor Trackpad Spacebar long-press (`-10004, "free_cursor", LONG_PRESS`), while keeping dedicated Trackpad button taps (`PRESS`) and swipe-on-Spacebar 2D Cursor Trackpad (`-10104`) completely working.
+  * Guards active Spacebar holds in **Smart hybrid** and **Hold to talk** modes against accidental `-10104` `free_cursor` triggers from slight thumb drift while speaking.
+  * Hardens `ModuleManager` fallback lookup to resolve `AgenticDictationExtension` via its registered module interfaces if constructor capture was not yet populated.
+
 ## [1.3.0](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.2.2...v1.3.0) (2026-11-25)
 
 ### ✨ New Features

@@ -775,6 +775,7 @@ class RamblerEnhancementsPatchTest {
                 initialStateMethod = lpInit,
                 softKeyboardDispatchTouchMethod = dispatchTouch,
                 eventGetKeyDataMethod = "g",
+                eventActionField = "a",
                 keyDataCodeField = "d",
                 keyDataDataField = "f",
                 extGetContextMethod = "ae",

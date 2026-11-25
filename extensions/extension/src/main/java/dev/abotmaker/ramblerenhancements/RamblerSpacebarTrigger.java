@@ -38,7 +38,11 @@ public final class RamblerSpacebarTrigger {
     private static final String MODULE_MANAGER_CLASS =
             "com.google.android.libraries.inputmethod.module.ModuleManager";
     public static final int KEYCODE_SHOW_SYSTEM_IME_PICKER = -10022;
+    public static final int KEYCODE_SWITCH_KEYBOARD = -10004;
+    public static final int KEYCODE_SWITCH_KEYBOARD_WITH_PAYLOAD = -10104;
     public static final String DATA_SPACE = "space";
+    public static final String DATA_FREE_CURSOR = "free_cursor";
+    private static final String ACTION_LONG_PRESS = "LONG_PRESS";
     public static final long HYBRID_HOLD_THRESHOLD_MS = 600L;
     private static final long HOLD_ASYNC_STOP_WINDOW_MS = 400L;
     private static final long HOLD_ASYNC_STOP_RECHECK_DELAY_MS = 200L;
@@ -64,6 +68,8 @@ public final class RamblerSpacebarTrigger {
 
     private static volatile Class<?> cachedEventClass;
     private static volatile Method cachedEventGetKeyData;
+    private static volatile Class<?> cachedEventActionClass;
+    private static volatile Field cachedEventActionField;
     private static volatile Class<?> cachedKeyDataClass;
     private static volatile Field cachedKeyDataCodeField;
     private static volatile Field cachedKeyDataDataField;
@@ -93,6 +99,8 @@ public final class RamblerSpacebarTrigger {
         pendingTriggerGeneration = 0;
         cachedEventClass = null;
         cachedEventGetKeyData = null;
+        cachedEventActionClass = null;
+        cachedEventActionField = null;
         cachedKeyDataClass = null;
         cachedKeyDataCodeField = null;
         cachedKeyDataDataField = null;
@@ -141,10 +149,21 @@ public final class RamblerSpacebarTrigger {
     }
 
     /**
-     * Handles {@code keyCode == -10022 && "space".equals(data)} inside
-     * {@code LanguagePickerExtension.consumeEvent(Event)}. Returns {@code true} only when Rambler
-     * accepted the toggle/start request; returns {@code false} to fall back cleanly to Gboard's
-     * stock language picker behavior.
+     * Handles Spacebar long-press events inside {@code LanguagePickerExtension.consumeEvent(Event)}:
+     * <ul>
+     *   <li>Stock IME-picker path: {@code keyCode == -10022 && "space".equals(data)}.</li>
+     *   <li>Cursor Trackpad path (when Gboard's {@code free_cursor} +
+     *       {@code enable_free_cursor_by_long_press_space} are active):
+     *       {@code keyCode == -10004 && "free_cursor".equals(data) && action == LONG_PRESS}.</li>
+     * </ul>
+     *
+     * <p>Swipe-on-Spacebar 2D Cursor Trackpad ({@code -10104}, {@code SWITCH_KEYBOARD_WITH_PAYLOAD})
+     * passes straight through whenever a Spacebar hold-to-talk gesture is not in progress, and is
+     * only suppressed during an active Spacebar hold so slight thumb drift while speaking never
+     * hijacks dictation.</p>
+     *
+     * <p>Returns {@code true} only when Rambler accepted the toggle/start request (or suppressed a
+     * mid-hold free-cursor hijack); returns {@code false} to fall back cleanly to stock behavior.</p>
      */
     public static boolean maybeHandleSpaceLongPress(Object langPickerExt, Object event) {
         if (langPickerExt == null || event == null) {
@@ -155,12 +174,32 @@ public final class RamblerSpacebarTrigger {
             if (keyData == null) {
                 return false;
             }
-            Integer keyCode = readKeyCode(keyData);
-            if (keyCode == null || keyCode.intValue() != KEYCODE_SHOW_SYSTEM_IME_PICKER) {
+            Integer keyCodeObj = readKeyCode(keyData);
+            if (keyCodeObj == null) {
                 return false;
             }
+            int keyCode = keyCodeObj.intValue();
             Object data = readKeyDataPayload(keyData);
-            if (!DATA_SPACE.equals(data)) {
+
+            // Guard: while the user is holding Spacebar after triggering Rambler in Smart Hybrid
+            // or Hold-to-Talk mode, prevent slight thumb drift from switching to FreeCursorKeyboard.
+            if (pendingHoldRelease
+                    && keyCode == KEYCODE_SWITCH_KEYBOARD_WITH_PAYLOAD
+                    && isFreeCursorPayload(data)) {
+                Context holdCtx = resolveContext(langPickerExt);
+                if (holdCtx != null
+                        && RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(holdCtx)) {
+                    return true;
+                }
+            }
+
+            boolean isStockSpaceLongPress =
+                    keyCode == KEYCODE_SHOW_SYSTEM_IME_PICKER && DATA_SPACE.equals(data);
+            boolean isTrackpadSpaceLongPress =
+                    keyCode == KEYCODE_SWITCH_KEYBOARD
+                            && DATA_FREE_CURSOR.equals(data)
+                            && isLongPressAction(event);
+            if (!isStockSpaceLongPress && !isTrackpadSpaceLongPress) {
                 return false;
             }
 
@@ -331,6 +370,21 @@ public final class RamblerSpacebarTrigger {
                 return null;
             }
             Object loaded = loadModule.invoke(moduleManager, agenticClass);
+            if (loaded == null) {
+                // ModuleManager indexes AgenticDictationExtension under its module interface
+                // (e.g. Lncb; on 18.5.4 / Laasl; on 18.8.0) rather than the concrete class.
+                for (Class<?> iface : agenticClass.getInterfaces()) {
+                    try {
+                        Object candidate = loadModule.invoke(moduleManager, iface);
+                        if (agenticClass.isInstance(candidate)) {
+                            loaded = candidate;
+                            break;
+                        }
+                    } catch (Throwable ignoredIface) {
+                        // Try next interface.
+                    }
+                }
+            }
             if (loaded != null) {
                 agenticExtensionRef = new WeakReference<Object>(loaded);
             }
@@ -439,6 +493,43 @@ public final class RamblerSpacebarTrigger {
             cachedEventGetKeyData = getter;
         }
         return getter.invoke(event);
+    }
+
+    private static boolean isLongPressAction(Object event) {
+        try {
+            Class<?> cls = event.getClass();
+            Field actionField = cachedEventActionField;
+            if (cachedEventActionClass != cls) {
+                actionField = findField(cls, RamblerDynamicConfig.SPACEBAR_LP_EVENT_ACTION_FIELD);
+                cachedEventActionClass = cls;
+                cachedEventActionField = actionField;
+            }
+            if (actionField == null) {
+                return false;
+            }
+            Object raw = actionField.get(event);
+            if (raw instanceof Enum<?> enumVal) {
+                return ACTION_LONG_PRESS.equals(enumVal.name());
+            }
+            return raw != null && ACTION_LONG_PRESS.equals(raw.toString());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isFreeCursorPayload(Object data) {
+        if (DATA_FREE_CURSOR.equals(data)) {
+            return true;
+        }
+        if (data == null) {
+            return false;
+        }
+        try {
+            String text = data.toString();
+            return text != null && text.contains(DATA_FREE_CURSOR);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static Integer readKeyCode(Object keyData) throws Throwable {

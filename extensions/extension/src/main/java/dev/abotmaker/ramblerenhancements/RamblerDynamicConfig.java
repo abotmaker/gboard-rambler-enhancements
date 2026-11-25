@@ -95,6 +95,7 @@ public final class RamblerDynamicConfig {
 
     // Spacebar long-press -> Rambler trigger bindings (18.5.4 defaults; rewritten for 18.8.0+)
     public static String SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD = "g";
+    public static String SPACEBAR_LP_EVENT_ACTION_FIELD = "a";
     public static String SPACEBAR_LP_KEYDATA_CODE_FIELD = "c";
     public static String SPACEBAR_LP_KEYDATA_DATA_FIELD = "e";
     public static String SPACEBAR_LP_EXT_GET_CONTEXT_METHOD = "ac";

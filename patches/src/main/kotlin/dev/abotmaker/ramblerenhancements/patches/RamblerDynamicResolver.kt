@@ -158,6 +158,7 @@ internal data class SpacebarTriggerTargets(
     val initialStateMethod: MutableMethod,
     val softKeyboardDispatchTouchMethod: MutableMethod?,
     val eventGetKeyDataMethod: String,
+    val eventActionField: String,
     val keyDataCodeField: String,
     val keyDataDataField: String,
     val extGetContextMethod: String,
@@ -1640,6 +1641,10 @@ internal object RamblerDynamicResolver {
         } ?: return null
 
         val eventType = consumeEventMethod.parameterTypes[0].toString()
+        val eventActionField = context.classDefByOrNull(eventType)?.instanceFields?.firstOrNull { f ->
+            val fieldCls = context.classDefByOrNull(f.type)
+            fieldCls?.superclass == "Ljava/lang/Enum;" && "LONG_PRESS" in fieldCls.collectStrings()
+        }?.name ?: "a"
         val consumeInsns = consumeEventMethod.implementation?.instructions?.toList() ?: return null
 
         val keyDataGetterRef = consumeInsns.firstNotNullOfOrNull { insn ->
@@ -1784,6 +1789,7 @@ internal object RamblerDynamicResolver {
             initialStateMethod = initialStateMethod,
             softKeyboardDispatchTouchMethod = softKeyboardDispatchTouchMethod,
             eventGetKeyDataMethod = keyDataGetterRef.name,
+            eventActionField = eventActionField,
             keyDataCodeField = keyDataCodeField,
             keyDataDataField = keyDataDataField,
             extGetContextMethod = extGetContextMethod,
