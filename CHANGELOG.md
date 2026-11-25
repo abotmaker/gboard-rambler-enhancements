@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.2](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.2.1...v1.2.2) (2026-11-25)
+
+### ✨ New Features
+
+* **On-Device Dictation Stats:**
+  * Adds a private, 100% local stats card at the top of the **Rambler Enhancements** hub and inside **Dictation stats & history**: tracks **total words dictated**, **completed sessions**, **weighted average speaking WPM**, **average cloud commit latency** (measured directly from `AgenticDictationExtension.onListeningStop` to commit, matching Gboard's own `fhv` latency measurement), **daily totals**, **peak WPM**, and **estimated time saved vs. typing** (honestly subtracting both speaking time and cloud wait time).
+  * Includes a configurable **Typing speed baseline** (`30–60 WPM`, default `40 WPM` mobile average), a **Track local dictation stats** toggle (independent of text history so numeric stats can stay on without saving dictated text), and one-tap **Reset stats**.
+  * **Privacy-first:** Stores only aggregate numeric counters on device and is intentionally excluded from `.json` settings backups.
+
 ## [1.2.1](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.2.0...v1.2.1) (2026-11-24)
 
 ### ✨ UX & Settings Refactor
