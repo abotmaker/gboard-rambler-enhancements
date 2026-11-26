@@ -10,9 +10,9 @@ Standalone [Morphe](https://morphe.software) patches for **Gboard Rambler** — 
 </p>
 
 <details>
-  <summary>Settings &amp; Per-App Rules preview</summary>
+  <summary>Settings Hub, Smart Search Bars &amp; Spacebar Quick Access preview</summary>
   <p align="center">
-    <img src="assets/rambler-settings-and-rules-showcase.png" alt="Rambler settings preview" width="840" />
+    <img src="assets/rambler-settings-and-rules-showcase.png" alt="Rambler Enhancements v1.3.4 settings showcase" width="840" />
   </p>
 </details>
 
