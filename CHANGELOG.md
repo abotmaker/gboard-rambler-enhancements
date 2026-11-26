@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.2](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.1...v1.3.2) (2026-11-26)
+
+### ⏪ Temporary Rollback
+
+* **Temporarily rolled back to the `v1.2.2` patchset** (pausing the `v1.3.0`/`v1.3.1` Spacebar long-press, Toolbar quick-access button, and Fix & Learn changes) while investigating reports of the keyboard crashing on startup for some users when stacking `v1.3.0+` alongside GboardWu.
+* Published as `v1.3.2` so Morphe Manager automatically updates users already on `v1.3.0` / `v1.3.1` back to the stable `v1.2.2` build without needing to remove and re-add the source.
+* All `v1.3.1` work remains preserved on the `dev` branch and will be re-enabled once the root cause is identified and fixed.
+
 ## [1.3.1](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.0...v1.3.1) (2026-11-25)
 
 ### 🐛 Bug Fixes

@@ -121,7 +121,6 @@ public final class RamblerEnhancementsActivity extends Activity {
     public static final String SECTION_DICTIONARY = "dictionary";
     public static final String SECTION_CONTACTS = "contacts";
     public static final String SECTION_HISTORY = "history";
-    public static final String SECTION_HISTORY_LIST = "history_list";
     public static final String SECTION_BACKUP = "backup";
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -270,7 +269,6 @@ public final class RamblerEnhancementsActivity extends Activity {
                 || SECTION_PRODUCTIVITY.equals(section)
                 || SECTION_DICTIONARY.equals(section)
                 || SECTION_HISTORY.equals(section)
-                || SECTION_HISTORY_LIST.equals(section)
                 || SECTION_BACKUP.equals(section)) {
             return section;
         }
@@ -296,9 +294,6 @@ public final class RamblerEnhancementsActivity extends Activity {
         }
         if (SECTION_HISTORY.equals(normalized)) {
             return "Dictation stats & history";
-        }
-        if (SECTION_HISTORY_LIST.equals(normalized)) {
-            return "Dictation history";
         }
         if (SECTION_BACKUP.equals(normalized)) {
             return "Backup & restore";
@@ -340,9 +335,6 @@ public final class RamblerEnhancementsActivity extends Activity {
         } else if (SECTION_HISTORY.equals(activeSection)
                 && RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
             buildHistorySection();
-        } else if (SECTION_HISTORY_LIST.equals(activeSection)
-                && RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
-            buildHistoryListSection();
         } else if (SECTION_BACKUP.equals(activeSection)) {
             buildBackupSection();
         } else {
@@ -868,36 +860,6 @@ public final class RamblerEnhancementsActivity extends Activity {
                                 refreshUi();
                             }));
         }
-
-        addSectionHeader("Quick access");
-        addToggleRow(
-                "Toolbar quick-access button",
-                "Adds a draggable \"Rambler\" button in Gboard's 4-dots toolbar menu so you can pin it to the top bar for 1-tap access.",
-                RamblerEnhancementsSettings.readToolbarButtonEnabled(this),
-                checked -> {
-                    RamblerEnhancementsSettings.writeToolbarButtonEnabled(this, checked);
-                    RamblerToolbarAccessPoint.refreshRegisteredControllers(this);
-                    refreshUi();
-                });
-        boolean spacebarEnabled =
-                RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(this);
-        addToggleRow(
-                "Long-press spacebar for Rambler",
-                "Hold the spacebar stationary to trigger Rambler right under your thumb (sliding on the spacebar still moves the cursor; use the bottom-right keyboard button to switch keyboards).",
-                spacebarEnabled,
-                checked -> {
-                    RamblerEnhancementsSettings.writeSpacebarLongPressRamblerEnabled(this, checked);
-                    refreshUi();
-                });
-        if (spacebarEnabled) {
-            String currentMode = RamblerEnhancementsSettings.readSpacebarLongPressMode(this);
-            addRow(
-                    "Spacebar trigger mode",
-                    describeSpacebarMode(currentMode),
-                    displaySpacebarMode(currentMode),
-                    true,
-                    () -> showSpacebarModeDialog(currentMode));
-        }
     }
 
     private void buildProductivitySection() {
@@ -1255,9 +1217,13 @@ public final class RamblerEnhancementsActivity extends Activity {
     }
 
     private void buildHistorySection() {
+        ensureInstalledAppsLoadedAsync();
+        RamblerWaveformDialogs.Palette pal = RamblerWaveformDialogs.palette(this);
         boolean statsOn = RamblerEnhancementsSettings.readStatsEnabled(this);
         boolean historyOn = RamblerEnhancementsSettings.readHistoryEnabled(this);
-        int savedCount = RamblerTextPipeline.readHistory(this).size();
+        List<RamblerTextPipeline.HistoryEntry> entries =
+                new ArrayList<RamblerTextPipeline.HistoryEntry>(
+                        RamblerTextPipeline.readHistory(this));
 
         LinearLayout statsCard = RamblerStatsCardView.buildCard(
                 this, false, null, this::refreshUi);
@@ -1287,24 +1253,7 @@ public final class RamblerEnhancementsActivity extends Activity {
                     refreshUi();
                 });
 
-        addRow(
-                "View dictation history",
-                savedCount == 0
-                        ? "No dictations saved yet. Tap to open history."
-                        : "Tap to browse, search, copy, or delete your saved local dictations.",
-                savedCount == 0 ? "Empty" : (savedCount + " saved"),
-                true,
-                () -> openSection(SECTION_HISTORY_LIST));
-    }
-
-    private void buildHistoryListSection() {
-        ensureInstalledAppsLoadedAsync();
-        RamblerWaveformDialogs.Palette pal = RamblerWaveformDialogs.palette(this);
-        List<RamblerTextPipeline.HistoryEntry> entries =
-                new ArrayList<RamblerTextPipeline.HistoryEntry>(
-                        RamblerTextPipeline.readHistory(this));
-
-        // Search bar + Clear all button
+        // Inline search bar + Clear all button
         LinearLayout searchRow = new LinearLayout(this);
         searchRow.setOrientation(LinearLayout.HORIZONTAL);
         searchRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -1378,15 +1327,6 @@ public final class RamblerEnhancementsActivity extends Activity {
                     RamblerProductivityDialogs.copyToClipboard(this, entry.text);
                     showToast("Copied to clipboard.");
                 });
-                card.setOnLongClickListener(v -> {
-                    RamblerFixAndLearnDialog.show(
-                            this,
-                            entry,
-                            appName,
-                            RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY,
-                            null);
-                    return true;
-                });
 
                 LinearLayout metaRow = new LinearLayout(this);
                 metaRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -1400,20 +1340,6 @@ public final class RamblerEnhancementsActivity extends Activity {
                 meta.setTextColor(pal.accent);
                 metaRow.addView(meta, new LinearLayout.LayoutParams(
                         0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
-
-                TextView fixBtn = new TextView(this);
-                fixBtn.setText("Fix & learn");
-                fixBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-                fixBtn.setTypeface(Typeface.DEFAULT_BOLD);
-                fixBtn.setTextColor(pal.accent);
-                fixBtn.setPadding(dp(8), dp(2), dp(8), dp(2));
-                fixBtn.setOnClickListener(v -> RamblerFixAndLearnDialog.show(
-                        this,
-                        entry,
-                        appName,
-                        RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY,
-                        null));
-                metaRow.addView(fixBtn);
 
                 TextView delBtn = new TextView(this);
                 delBtn.setText("Delete");
@@ -1834,59 +1760,6 @@ public final class RamblerEnhancementsActivity extends Activity {
                         onSave.accept(input.getText() == null ? "" : input.getText().toString()))
                 .setNegativeButton("Cancel", null)
                 .show();
-    }
-
-    private void showSpacebarModeDialog(String currentMode) {
-        final String[] values = {
-                RamblerEnhancementsSettings.SPACEBAR_MODE_HYBRID,
-                RamblerEnhancementsSettings.SPACEBAR_MODE_HOLD,
-                RamblerEnhancementsSettings.SPACEBAR_MODE_TOGGLE
-        };
-        final String[] items = {
-                "Smart hybrid (Recommended)\nQuick release stays hands-free; keep holding while speaking and release to transcribe.",
-                "Hold to talk (Push-to-Talk)\nHold the spacebar while speaking; lifting your thumb immediately stops & transcribes.",
-                "Toggle (Hands-free)\nHold to start, lift your thumb and talk freely; stop via auto-stop, mic button, or another long-press."
-        };
-        int checkedIndex = 0;
-        for (int i = 0; i < values.length; i++) {
-            if (values[i].equals(currentMode)) {
-                checkedIndex = i;
-                break;
-            }
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Spacebar trigger mode")
-                .setSingleChoiceItems(items, checkedIndex, (dialog, which) -> {
-                    if (which >= 0 && which < values.length) {
-                        String chosen = values[which];
-                        RamblerEnhancementsSettings.writeSpacebarLongPressMode(this, chosen);
-                        showToast("Spacebar mode: " + displaySpacebarMode(chosen));
-                        refreshUi();
-                    }
-                    dialog.dismiss();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private static String displaySpacebarMode(String mode) {
-        if (RamblerEnhancementsSettings.SPACEBAR_MODE_HOLD.equals(mode)) {
-            return "Hold to talk";
-        }
-        if (RamblerEnhancementsSettings.SPACEBAR_MODE_TOGGLE.equals(mode)) {
-            return "Toggle";
-        }
-        return "Smart hybrid";
-    }
-
-    private static String describeSpacebarMode(String mode) {
-        if (RamblerEnhancementsSettings.SPACEBAR_MODE_HOLD.equals(mode)) {
-            return "Push-to-Talk: keep holding the spacebar while speaking; releasing immediately stops & transcribes.";
-        }
-        if (RamblerEnhancementsSettings.SPACEBAR_MODE_TOGGLE.equals(mode)) {
-            return "Hands-free toggle: hold spacebar to start, lift your thumb and talk freely; stop via auto-stop, mic, or another long-press.";
-        }
-        return "Smart hybrid: quick release stays hands-free; keep holding while speaking (>0.6s) and release to stop & transcribe.";
     }
 
     private void showConfirmDialog(String title, String message, Runnable onConfirm) {
