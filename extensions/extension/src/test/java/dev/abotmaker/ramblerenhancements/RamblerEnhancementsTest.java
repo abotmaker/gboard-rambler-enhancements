@@ -778,6 +778,12 @@ public final class RamblerEnhancementsTest {
         assertEquals("Dictation stats & history",
                 RamblerEnhancementsActivity.titleForSection(
                         RamblerEnhancementsActivity.SECTION_HISTORY));
+        assertEquals(RamblerEnhancementsActivity.SECTION_HISTORY_LIST,
+                RamblerEnhancementsActivity.normalizeSection(
+                        RamblerEnhancementsActivity.SECTION_HISTORY_LIST));
+        assertEquals("Dictation history",
+                RamblerEnhancementsActivity.titleForSection(
+                        RamblerEnhancementsActivity.SECTION_HISTORY_LIST));
     }
 
     @Test
@@ -889,6 +895,465 @@ public final class RamblerEnhancementsTest {
         assertEquals(0L, cleared.totalWords);
         assertEquals(0, cleared.averageWpm());
         assertEquals("—", RamblerDictationStats.formatTimeSaved(0L, false));
+    }
+
+    @Test
+    public void fixAndLearnAndToolbarAccessPointWorkCleanly() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+
+        // Tokenization strips outer punctuation while preserving identifiers and contractions.
+        List<String> tokens = RamblerFixAndLearnDialog.tokenizeForChips(
+                "Check \"std_allocations\", don't forget morphy!");
+        assertEquals(Arrays.asList("Check", "std_allocations", "don't", "forget", "morphy"), tokens);
+
+        // Learned replace rules deduplicate in-place for matching find + scope, while keeping
+        // app-scoped rules distinct from global rules.
+        RamblerFixAndLearnDialog.upsertLearnedReplaceRule(context, "morphy", "Morphe", "");
+        RamblerFixAndLearnDialog.upsertLearnedReplaceRule(context, "MORPHY", "MorpheApp", "");
+        RamblerFixAndLearnDialog.upsertLearnedReplaceRule(
+                context, "morphy", "MorpheX", "com.twitter.android");
+        List<RamblerTextPipeline.ReplaceRule> rules = RamblerTextPipeline.readReplaceRules(context);
+        assertEquals(2, rules.size());
+        assertEquals("MorpheApp", rules.get(0).replace);
+        assertTrue(rules.get(0).packages.isEmpty());
+        assertEquals("MorpheX", rules.get(1).replace);
+        assertEquals(Collections.singletonList("com.twitter.android"), rules.get(1).packages);
+
+        // Toolbar Access Point token list, icon drawing, launch intent, and setting persistence.
+        assertTrue(RamblerEnhancementsSettings.readToolbarButtonEnabled(context));
+        List<String> expanded = RamblerToolbarAccessPoint.appendToken(
+                Arrays.asList("clipboard", "translate"));
+        assertEquals(Arrays.asList("clipboard", "translate", RamblerToolbarAccessPoint.TOKEN),
+                expanded);
+        assertEquals(expanded, RamblerToolbarAccessPoint.appendToken(expanded));
+        assertEquals(Arrays.asList("clipboard", "translate"),
+                RamblerToolbarAccessPoint.removeToken(expanded));
+        org.junit.Assert.assertNotNull(RamblerToolbarAccessPoint.createRamblerToolbarIcon(context));
+        android.content.Intent launch = RamblerToolbarAccessPoint.buildLaunchIntent(context);
+        assertEquals(RamblerEnhancementsActivity.class.getName(),
+                launch.getComponent().getClassName());
+        assertTrue((launch.getFlags() & android.content.Intent.FLAG_ACTIVITY_NEW_TASK) != 0);
+
+        RamblerEnhancementsSettings.writeToolbarButtonEnabled(context, false);
+        assertFalse(RamblerEnhancementsSettings.readToolbarButtonEnabled(context));
+        String backup = RamblerBackupManager.exportJson(context);
+        assertTrue(backup.contains("\"toolbarButtonEnabled\": false"));
+        RamblerEnhancementsSettings.writeToolbarButtonEnabled(context, true);
+        assertTrue(RamblerBackupManager.importJson(context, backup).success);
+        assertFalse(RamblerEnhancementsSettings.readToolbarButtonEnabled(context));
+    }
+
+    @Test
+    public void spacebarLongPressTriggerHandlesSpaceAndFallsBackCleanly() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerSpacebarTrigger.resetForTesting();
+
+        // Save and restore dynamic config fields used by RamblerSpacebarTrigger.
+        String prevCtxField = RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD;
+        String prevGetKeyData = RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD;
+        String prevCodeField = RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD;
+        String prevDataField = RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD;
+        String prevExtCtx = RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD;
+        String prevIsActive = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD;
+        String prevTrigger = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD;
+        String prevAgenticClass = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS;
+        try {
+            RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "b";
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD = "g";
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD = "c";
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD = "e";
+            RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD = "ac";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD = "ag";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD = "C";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS = FakeSpacebarAgentic.class.getName();
+
+            FakeSpacebarLangPicker langPicker = new FakeSpacebarLangPicker(context);
+            FakeSpacebarAgentic agentic = new FakeSpacebarAgentic(context);
+            RamblerSpacebarTrigger.onAgenticExtensionCreated(agentic);
+
+            // Enabled by default and clears NO_IME_PICKER so single-language users get spacebar long-press.
+            assertTrue(RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(context));
+            assertTrue(RamblerSpacebarTrigger.shouldClearNoImePickerState(langPicker));
+
+            // Spacebar long-press (-10022, "space") invokes AgenticDictationExtension.C() and consumes event.
+            assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(
+                    langPicker, new FakeSpacebarEvent(new FakeSpacebarKeyData(-10022, "space"))));
+            assertEquals(1, agentic.triggerCount);
+
+            // Floating globe long-press (-10022, "floating_globe") and Globe tap (-10011) pass through untouched.
+            assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(
+                    langPicker, new FakeSpacebarEvent(new FakeSpacebarKeyData(-10022, "floating_globe"))));
+            assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(
+                    langPicker, new FakeSpacebarEvent(new FakeSpacebarKeyData(-10011, "space"))));
+            assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(
+                    langPicker, new FakeSpacebarEvent(new FakeSpacebarKeyData(62, " "))));
+            assertEquals(1, agentic.triggerCount);
+
+            // Inactive Rambler (e.g. password field) or rejected trigger falls back cleanly to stock picker.
+            agentic.active = false;
+            assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(
+                    langPicker, new FakeSpacebarEvent(new FakeSpacebarKeyData(-10022, "space"))));
+            assertEquals(1, agentic.triggerCount);
+            agentic.active = true;
+            agentic.triggerResult = false;
+            assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(
+                    langPicker, new FakeSpacebarEvent(new FakeSpacebarKeyData(-10022, "space"))));
+            assertEquals(2, agentic.triggerCount);
+            agentic.triggerResult = true;
+
+            // Turning the toggle OFF disables both the event hook and the NO_IME_PICKER override,
+            // and survives JSON backup export/import round-trip.
+            RamblerEnhancementsSettings.writeSpacebarLongPressRamblerEnabled(context, false);
+            assertFalse(RamblerSpacebarTrigger.shouldClearNoImePickerState(langPicker));
+            assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(
+                    langPicker, new FakeSpacebarEvent(new FakeSpacebarKeyData(-10022, "space"))));
+            assertEquals(2, agentic.triggerCount);
+
+            RamblerEnhancementsSettings.writeSpacebarLongPressMode(
+                    context, RamblerEnhancementsSettings.SPACEBAR_MODE_HOLD);
+            String backup = RamblerBackupManager.exportJson(context);
+            assertTrue(backup.contains("\"spacebarLongPressRamblerEnabled\": false"));
+            assertTrue(backup.contains("\"spacebarLongPressMode\": \"hold\""));
+            RamblerEnhancementsSettings.writeSpacebarLongPressRamblerEnabled(context, true);
+            RamblerEnhancementsSettings.writeSpacebarLongPressMode(
+                    context, RamblerEnhancementsSettings.SPACEBAR_MODE_TOGGLE);
+            assertTrue(RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(context));
+            assertEquals(RamblerEnhancementsSettings.SPACEBAR_MODE_TOGGLE,
+                    RamblerEnhancementsSettings.readSpacebarLongPressMode(context));
+            assertTrue(RamblerBackupManager.importJson(context, backup).success);
+            assertFalse(RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(context));
+            assertEquals(RamblerEnhancementsSettings.SPACEBAR_MODE_HOLD,
+                    RamblerEnhancementsSettings.readSpacebarLongPressMode(context));
+        } finally {
+            RamblerSpacebarTrigger.resetForTesting();
+            RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = prevCtxField;
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD = prevGetKeyData;
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD = prevCodeField;
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD = prevDataField;
+            RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD = prevExtCtx;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD = prevIsActive;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD = prevTrigger;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS = prevAgenticClass;
+        }
+    }
+
+    @Test
+    public void spacebarLongPressModesHybridHoldAndToggleBehaveCorrectly() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerSpacebarTrigger.resetForTesting();
+
+        String prevCtxField = RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD;
+        String prevGetKeyData = RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD;
+        String prevCodeField = RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD;
+        String prevDataField = RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD;
+        String prevExtCtx = RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD;
+        String prevIsActive = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD;
+        String prevTrigger = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD;
+        String prevAgenticClass = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS;
+        String prevUiMgrField = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_UI_MANAGER_FIELD;
+        String prevUiGetState = RamblerDynamicConfig.SPACEBAR_LP_UI_MANAGER_GET_STATE_METHOD;
+        try {
+            RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "b";
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD = "g";
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD = "c";
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD = "e";
+            RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD = "ac";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD = "ag";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD = "C";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS = FakeSpacebarAgentic.class.getName();
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_UI_MANAGER_FIELD = "c";
+            RamblerDynamicConfig.SPACEBAR_LP_UI_MANAGER_GET_STATE_METHOD = "h";
+
+            final long[] now = {10_000L};
+            RamblerSpacebarTrigger.setClockForTesting(() -> now[0]);
+
+            FakeSpacebarLangPicker langPicker = new FakeSpacebarLangPicker(context);
+            FakeSpacebarAgentic agentic = new FakeSpacebarAgentic(context);
+            RamblerSpacebarTrigger.onAgenticExtensionCreated(agentic);
+            FakeSpacebarEvent spaceEvent =
+                    new FakeSpacebarEvent(new FakeSpacebarKeyData(-10022, "space"));
+
+            android.view.MotionEvent upEvent = android.view.MotionEvent.obtain(
+                    0L, 100L, android.view.MotionEvent.ACTION_UP, 10f, 10f, 0);
+            try {
+                // Default mode is Smart Hybrid.
+                assertEquals(RamblerEnhancementsSettings.SPACEBAR_MODE_HYBRID,
+                        RamblerEnhancementsSettings.readSpacebarLongPressMode(context));
+
+                // 1. Smart Hybrid + quick release (<600ms) -> stays hands-free (does NOT stop).
+                agentic.c.state = FakeRamblerUiState.IDLING;
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, spaceEvent));
+                assertEquals(1, agentic.triggerCount);
+                agentic.c.state = FakeRamblerUiState.LISTENING;
+                now[0] += 250L;
+                RamblerSpacebarTrigger.onKeyboardTouchEvent(upEvent);
+                assertEquals(1, agentic.triggerCount);
+
+                // Second long-press while LISTENING stops hands-free session and does NOT arm release.
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, spaceEvent));
+                assertEquals(2, agentic.triggerCount);
+                agentic.c.state = FakeRamblerUiState.IDLING;
+                now[0] += 1000L;
+                RamblerSpacebarTrigger.onKeyboardTouchEvent(upEvent);
+                assertEquals(2, agentic.triggerCount);
+
+                // 2. Smart Hybrid + sustained hold (>=600ms) -> release stops & transcribes!
+                agentic.c.state = FakeRamblerUiState.IDLING;
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, spaceEvent));
+                assertEquals(3, agentic.triggerCount);
+                agentic.c.state = FakeRamblerUiState.LISTENING;
+                now[0] += 1500L;
+                RamblerSpacebarTrigger.onKeyboardTouchEvent(upEvent);
+                assertEquals(4, agentic.triggerCount);
+
+                // 3. Guard: if Rambler already transitioned to PROCESSING or IDLING before release,
+                //    releasing does NOT re-trigger C()!
+                agentic.c.state = FakeRamblerUiState.IDLING;
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, spaceEvent));
+                assertEquals(5, agentic.triggerCount);
+                agentic.c.state = FakeRamblerUiState.PROCESSING;
+                now[0] += 1500L;
+                RamblerSpacebarTrigger.onKeyboardTouchEvent(upEvent);
+                assertEquals(5, agentic.triggerCount);
+
+                // 4. Hold to talk (Push-to-Talk): even a short 100ms hold stops on release!
+                RamblerEnhancementsSettings.writeSpacebarLongPressMode(
+                        context, RamblerEnhancementsSettings.SPACEBAR_MODE_HOLD);
+                agentic.c.state = FakeRamblerUiState.IDLING;
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, spaceEvent));
+                assertEquals(6, agentic.triggerCount);
+                agentic.c.state = FakeRamblerUiState.LISTENING;
+                now[0] += 100L;
+                RamblerSpacebarTrigger.onKeyboardTouchEvent(upEvent);
+                assertEquals(7, agentic.triggerCount);
+
+                // 5. Toggle (Hands-free): long hold + release NEVER stops automatically.
+                RamblerEnhancementsSettings.writeSpacebarLongPressMode(
+                        context, RamblerEnhancementsSettings.SPACEBAR_MODE_TOGGLE);
+                agentic.c.state = FakeRamblerUiState.IDLING;
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, spaceEvent));
+                assertEquals(8, agentic.triggerCount);
+                agentic.c.state = FakeRamblerUiState.LISTENING;
+                now[0] += 3000L;
+                RamblerSpacebarTrigger.onKeyboardTouchEvent(upEvent);
+                assertEquals(8, agentic.triggerCount);
+            } finally {
+                upEvent.recycle();
+            }
+        } finally {
+            RamblerSpacebarTrigger.resetForTesting();
+            RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = prevCtxField;
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD = prevGetKeyData;
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD = prevCodeField;
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD = prevDataField;
+            RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD = prevExtCtx;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD = prevIsActive;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD = prevTrigger;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS = prevAgenticClass;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_UI_MANAGER_FIELD = prevUiMgrField;
+            RamblerDynamicConfig.SPACEBAR_LP_UI_MANAGER_GET_STATE_METHOD = prevUiGetState;
+        }
+    }
+
+    @Test
+    public void spacebarLongPressWorksWithCursorTrackpadEnabledAndPreservesSwipeTrackpad() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerSpacebarTrigger.resetForTesting();
+
+        String prevCtxField = RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD;
+        String prevGetKeyData = RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD;
+        String prevActionField = RamblerDynamicConfig.SPACEBAR_LP_EVENT_ACTION_FIELD;
+        String prevCodeField = RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD;
+        String prevDataField = RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD;
+        String prevExtCtx = RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD;
+        String prevIsActive = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD;
+        String prevTrigger = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD;
+        String prevAgenticClass = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS;
+        String prevUiMgrField = RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_UI_MANAGER_FIELD;
+        String prevUiGetState = RamblerDynamicConfig.SPACEBAR_LP_UI_MANAGER_GET_STATE_METHOD;
+        try {
+            RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "b";
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD = "g";
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_ACTION_FIELD = "a";
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD = "c";
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD = "e";
+            RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD = "ac";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD = "ag";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD = "C";
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS = FakeSpacebarAgentic.class.getName();
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_UI_MANAGER_FIELD = "c";
+            RamblerDynamicConfig.SPACEBAR_LP_UI_MANAGER_GET_STATE_METHOD = "h";
+
+            final long[] now = {20_000L};
+            RamblerSpacebarTrigger.setClockForTesting(() -> now[0]);
+
+            FakeSpacebarLangPicker langPicker = new FakeSpacebarLangPicker(context);
+            FakeSpacebarAgentic agentic = new FakeSpacebarAgentic(context);
+            RamblerSpacebarTrigger.onAgenticExtensionCreated(agentic);
+
+            FakeSpacebarEvent trackpadSpaceLongPress = new FakeSpacebarEvent(
+                    new FakeSpacebarKeyData(-10004, "free_cursor"), FakeSpacebarAction.LONG_PRESS);
+            FakeSpacebarEvent trackpadButtonTap = new FakeSpacebarEvent(
+                    new FakeSpacebarKeyData(-10004, "free_cursor"), FakeSpacebarAction.PRESS);
+            FakeSpacebarEvent otherSwitchKeyboard = new FakeSpacebarEvent(
+                    new FakeSpacebarKeyData(-10004, "symbol"), FakeSpacebarAction.LONG_PRESS);
+            FakeSpacebarEvent swipeTrackpadEvent = new FakeSpacebarEvent(
+                    new FakeSpacebarKeyData(-10104, new FakeFreeCursorPayload()),
+                    FakeSpacebarAction.PRESS);
+
+            android.view.MotionEvent upEvent = android.view.MotionEvent.obtain(
+                    0L, 100L, android.view.MotionEvent.ACTION_UP, 10f, 10f, 0);
+            try {
+                // Dedicated Trackpad button tap (PRESS) and non-free_cursor keyboard switches pass through.
+                assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, trackpadButtonTap));
+                assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, otherSwitchKeyboard));
+                // Swiping Spacebar for 2D Cursor Trackpad (-10104) passes through when idle.
+                assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, swipeTrackpadEvent));
+                assertEquals(0, agentic.triggerCount);
+
+                // Stationary Spacebar long-press when Cursor Trackpad is enabled dispatches
+                // (-10004, "free_cursor", LONG_PRESS) -> starts Rambler and arms hold-release!
+                agentic.c.state = FakeRamblerUiState.IDLING;
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, trackpadSpaceLongPress));
+                assertEquals(1, agentic.triggerCount);
+
+                // While still holding Spacebar in Smart Hybrid / Hold-to-Talk mode, slight thumb drift
+                // emitting (-10104, free_cursor payload) is suppressed so Trackpad doesn't hijack dictation.
+                agentic.c.state = FakeRamblerUiState.LISTENING;
+                assertTrue(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, swipeTrackpadEvent));
+                assertEquals(1, agentic.triggerCount);
+
+                // Releasing after >= 600ms stops listening & transcribes, and disarms the mid-hold guard.
+                now[0] += 1200L;
+                RamblerSpacebarTrigger.onKeyboardTouchEvent(upEvent);
+                assertEquals(2, agentic.triggerCount);
+
+                // After release, swiping Spacebar for 2D Cursor Trackpad works again!
+                assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, swipeTrackpadEvent));
+                assertEquals(2, agentic.triggerCount);
+
+                // Turning the Spacebar toggle OFF restores stock long-press Trackpad behavior.
+                RamblerEnhancementsSettings.writeSpacebarLongPressRamblerEnabled(context, false);
+                assertFalse(RamblerSpacebarTrigger.maybeHandleSpaceLongPress(langPicker, trackpadSpaceLongPress));
+                assertEquals(2, agentic.triggerCount);
+            } finally {
+                upEvent.recycle();
+            }
+        } finally {
+            RamblerSpacebarTrigger.resetForTesting();
+            RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = prevCtxField;
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_GET_KEYDATA_METHOD = prevGetKeyData;
+            RamblerDynamicConfig.SPACEBAR_LP_EVENT_ACTION_FIELD = prevActionField;
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_CODE_FIELD = prevCodeField;
+            RamblerDynamicConfig.SPACEBAR_LP_KEYDATA_DATA_FIELD = prevDataField;
+            RamblerDynamicConfig.SPACEBAR_LP_EXT_GET_CONTEXT_METHOD = prevExtCtx;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_IS_ACTIVE_METHOD = prevIsActive;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_TRIGGER_METHOD = prevTrigger;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_CLASS = prevAgenticClass;
+            RamblerDynamicConfig.SPACEBAR_LP_AGENTIC_UI_MANAGER_FIELD = prevUiMgrField;
+            RamblerDynamicConfig.SPACEBAR_LP_UI_MANAGER_GET_STATE_METHOD = prevUiGetState;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static class FakeAbstractExtension {
+        private final Context ctx;
+        boolean active = true;
+
+        FakeAbstractExtension(Context ctx) {
+            this.ctx = ctx;
+        }
+
+        public Context ac() {
+            return ctx;
+        }
+
+        public boolean ag() {
+            return active;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakeSpacebarLangPicker extends FakeAbstractExtension {
+        FakeSpacebarLangPicker(Context ctx) {
+            super(ctx);
+        }
+    }
+
+    private enum FakeRamblerUiState {
+        IDLING, WAITING, LISTENING, PROCESSING, ERROR
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakeRamblerUiManager {
+        FakeRamblerUiState state = FakeRamblerUiState.IDLING;
+
+        public FakeRamblerUiState h() {
+            return state;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakeSpacebarAgentic extends FakeAbstractExtension {
+        final Context b;
+        final FakeRamblerUiManager c = new FakeRamblerUiManager();
+        int triggerCount;
+        boolean triggerResult = true;
+
+        FakeSpacebarAgentic(Context ctx) {
+            super(ctx);
+            this.b = ctx;
+        }
+
+        public boolean C() {
+            triggerCount++;
+            return triggerResult;
+        }
+    }
+
+    private enum FakeSpacebarAction {
+        PRESS, LONG_PRESS
+    }
+
+    private static final class FakeFreeCursorPayload {
+        @Override
+        public String toString() {
+            return "KeyboardTypeAndPayload(keyboardType=free_cursor, payload=MotionEvent)";
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakeSpacebarEvent {
+        final FakeSpacebarAction a;
+        final FakeSpacebarKeyData kd;
+
+        FakeSpacebarEvent(FakeSpacebarKeyData kd) {
+            this(kd, FakeSpacebarAction.LONG_PRESS);
+        }
+
+        FakeSpacebarEvent(FakeSpacebarKeyData kd, FakeSpacebarAction action) {
+            this.kd = kd;
+            this.a = action;
+        }
+
+        public FakeSpacebarKeyData g() {
+            return kd;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakeSpacebarKeyData {
+        final int c;
+        final Object e;
+
+        FakeSpacebarKeyData(int c, Object e) {
+            this.c = c;
+            this.e = e;
+        }
     }
 
     @SuppressWarnings("unused")

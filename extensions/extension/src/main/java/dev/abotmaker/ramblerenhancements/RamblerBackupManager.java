@@ -97,6 +97,12 @@ public final class RamblerBackupManager {
                     RamblerEnhancementsSettings.readStatsEnabled(context));
             behavior.put("typingBaselineWpm",
                     RamblerEnhancementsSettings.readTypingBaselineWpm(context));
+            behavior.put("toolbarButtonEnabled",
+                    RamblerEnhancementsSettings.readToolbarButtonEnabled(context));
+            behavior.put("spacebarLongPressRamblerEnabled",
+                    RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(context));
+            behavior.put("spacebarLongPressMode",
+                    RamblerEnhancementsSettings.readSpacebarLongPressMode(context));
             root.put("behavior", behavior);
 
             // 3. Hands-free voice actions
@@ -269,6 +275,21 @@ public final class RamblerBackupManager {
                             behavior.optInt(
                                     "typingBaselineWpm",
                                     RamblerEnhancementsSettings.DEFAULT_TYPING_BASELINE_WPM));
+                }
+                if (behavior.has("toolbarButtonEnabled")) {
+                    RamblerEnhancementsSettings.writeToolbarButtonEnabled(
+                            context, behavior.optBoolean("toolbarButtonEnabled", true));
+                }
+                if (behavior.has("spacebarLongPressRamblerEnabled")) {
+                    RamblerEnhancementsSettings.writeSpacebarLongPressRamblerEnabled(
+                            context, behavior.optBoolean("spacebarLongPressRamblerEnabled", true));
+                }
+                if (behavior.has("spacebarLongPressMode")) {
+                    RamblerEnhancementsSettings.writeSpacebarLongPressMode(
+                            context,
+                            behavior.optString(
+                                    "spacebarLongPressMode",
+                                    RamblerEnhancementsSettings.DEFAULT_SPACEBAR_LONG_PRESS_MODE));
                 }
                 restoredSections++;
             }

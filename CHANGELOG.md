@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.3](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.2...v1.3.3) (2026-11-26)
+
+### 🐛 Bug Fixes
+
+* **Fix `VerifyError` crash on keyboard open when stacking with GboardWu `v4.5.0+` (`SoftKeyboardView.dispatchTouchEvent`):**
+  * Restores all `v1.3.0`/`v1.3.1` features (Long-press Spacebar for Rambler with Cursor Trackpad compatibility, draggable Rambler Toolbar quick-access button, 1-Tap Fix & Learn, and private Dictation History card).
+  * Upstream GboardWu `v4.5.0` added `GboardClipboardSelectAllPatch`, which wraps `SoftKeyboardView.dispatchTouchEvent(MotionEvent)Z` via `addInstructions` with an internal `:stock` branch label. Prepending a 3-code-unit `invoke-static` at index `0` shifted that branch from `0x4` to `0x7` while its un-rebound label stayed at `0x7`, producing `VerifyError: [0x7] branch offset of zero not allowed`.
+  * `installSpacebarTriggerHooks` now wraps `SoftKeyboardView.dispatchTouchEvent` via a verbatim rename (`morpheRamblerStockDispatchTouch`) plus a branchless 4-instruction wrapper — shifting zero instructions inside any pre-existing wrapper so stacking with GboardWu `v4.5.0+` verifies cleanly in **both** patch orders.
+  * Hardens `LanguagePickerExtension.getInitialKeyboardState`'s wrapper to use `addInstructionsWithLabels` so its internal label also survives any other patch prepending instructions to it.
+
 ## [1.3.2](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.1...v1.3.2) (2026-11-26)
 
 ### ⏪ Temporary Rollback
