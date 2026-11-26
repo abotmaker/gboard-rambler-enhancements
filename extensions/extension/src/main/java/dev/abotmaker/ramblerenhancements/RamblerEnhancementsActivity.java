@@ -424,10 +424,17 @@ public final class RamblerEnhancementsActivity extends Activity {
         if (RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS) {
             boolean sendOn = RamblerEnhancementsSettings.readVoiceSendEnabled(this);
             boolean searchOn = RamblerEnhancementsSettings.readVoiceSearchEnabled(this);
+            boolean autoSearchOn = RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(this);
+            int autoSearchAppCount = RamblerEnhancementsSettings.readAutoSearchApps(this).size();
+            boolean autoSearchActive = autoSearchOn && autoSearchAppCount > 0;
             int snippetCount = RamblerTextPipeline.readSnippets(this).size();
             int replaceCount = RamblerTextPipeline.readReplaceRules(this).size();
             String badge;
-            if (sendOn && searchOn) {
+            if (autoSearchActive && sendOn) {
+                badge = "Auto-search · Send";
+            } else if (autoSearchActive) {
+                badge = "Auto-search (" + autoSearchAppCount + ")";
+            } else if (sendOn && searchOn) {
                 badge = "Send · Search";
             } else if (sendOn) {
                 badge = "Send ON";
@@ -439,8 +446,11 @@ public final class RamblerEnhancementsActivity extends Activity {
             } else {
                 badge = "Off";
             }
-            String summary = "Send " + (sendOn ? "ON" : "OFF")
-                    + " · Search " + (searchOn ? "ON" : "OFF")
+            String autoSearchPart = autoSearchOn
+                    ? ("Auto-search " + autoSearchAppCount + (autoSearchAppCount == 1 ? " app" : " apps"))
+                    : "Auto-search OFF";
+            String summary = autoSearchPart
+                    + " · Send " + (sendOn ? "ON" : "OFF")
                     + " · " + snippetCount + (snippetCount == 1 ? " snippet" : " snippets")
                     + " · " + replaceCount + " replace";
             addRow("Voice actions, snippets & replace", summary, badge, true,
@@ -959,6 +969,62 @@ public final class RamblerEnhancementsActivity extends Activity {
                                 showToast("Saved search triggers.");
                                 refreshUi();
                             }));
+        }
+
+        addSectionHeader("Search bars");
+        boolean searchStripPeriodOn =
+                RamblerEnhancementsSettings.readSearchStripTrailingPeriod(this);
+        addToggleRow(
+                "Auto-strip period in search bars",
+                "Automatically removes a trailing period when dictating into Search bars and browser address bars (preserves abbreviations like \"Dr.\" or \"e.g.\").",
+                searchStripPeriodOn,
+                checked -> {
+                    RamblerEnhancementsSettings.writeSearchStripTrailingPeriod(this, checked);
+                    refreshUi();
+                });
+
+        boolean autoSearchOn = RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(this);
+        java.util.Set<String> autoSearchApps =
+                RamblerEnhancementsSettings.readAutoSearchApps(this);
+        Runnable openAutoSearchAppPicker = () -> withInstalledApps((apps, map) ->
+                RamblerAppRuleDialogs.showAppPickerDialog(
+                        this,
+                        "Auto-search apps",
+                        "Dictation automatically submits Search bars (and browser address bars) only in the apps you select here.",
+                        RamblerEnhancementsSettings.readAutoSearchApps(this),
+                        apps,
+                        picked -> {
+                            RamblerEnhancementsSettings.writeAutoSearchApps(this, picked);
+                            showToast(picked.isEmpty()
+                                    ? "Cleared auto-search apps."
+                                    : "Auto-search enabled for " + picked.size() + " app(s).");
+                            refreshUi();
+                        }));
+        addToggleRow(
+                "Auto-search on commit",
+                "Immediately submits the search right after dictation finishes in your selected apps (no need to tap Search or say \"hit search\"). Only fires in Search bars and browser address bars.",
+                autoSearchOn,
+                checked -> {
+                    RamblerEnhancementsSettings.writeAutoSearchOnCommitEnabled(this, checked);
+                    refreshUi();
+                    if (checked && RamblerEnhancementsSettings.readAutoSearchApps(this).isEmpty()) {
+                        openAutoSearchAppPicker.run();
+                    }
+                });
+        if (autoSearchOn || !autoSearchApps.isEmpty()) {
+            String appsSubtitle = autoSearchApps.isEmpty()
+                    ? "No apps selected yet — tap to pick apps (e.g. Chrome, YouTube, Play Store, Settings)."
+                    : RamblerCustomInstructionRules.formatPackageList(
+                            autoSearchApps, packageLabelCache, 4);
+            String appsBadge = autoSearchApps.isEmpty()
+                    ? "Select apps"
+                    : autoSearchApps.size() + (autoSearchApps.size() == 1 ? " app" : " apps");
+            addRow(
+                    "Apps for auto-search",
+                    appsSubtitle,
+                    appsBadge,
+                    true,
+                    openAutoSearchAppPicker);
         }
 
         addSectionHeader("Voice snippets");

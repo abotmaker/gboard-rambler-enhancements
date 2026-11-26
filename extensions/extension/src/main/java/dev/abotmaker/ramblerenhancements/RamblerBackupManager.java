@@ -115,6 +115,15 @@ public final class RamblerBackupManager {
                     RamblerEnhancementsSettings.readVoiceSearchEnabled(context));
             voiceActions.put("voiceSearchTriggers",
                     RamblerEnhancementsSettings.readVoiceSearchTriggers(context));
+            voiceActions.put("searchStripTrailingPeriod",
+                    RamblerEnhancementsSettings.readSearchStripTrailingPeriod(context));
+            voiceActions.put("autoSearchOnCommitEnabled",
+                    RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(context));
+            JSONArray autoSearchAppsArr = new JSONArray();
+            for (String pkg : RamblerEnhancementsSettings.readAutoSearchApps(context)) {
+                autoSearchAppsArr.put(pkg);
+            }
+            voiceActions.put("autoSearchApps", autoSearchAppsArr);
             root.put("voiceActions", voiceActions);
 
             // 4. Custom instructions & per-app rules
@@ -314,6 +323,31 @@ public final class RamblerBackupManager {
                     RamblerEnhancementsSettings.writeVoiceSearchTriggers(
                             context, voiceActions.optString("voiceSearchTriggers",
                                     RamblerEnhancementsSettings.DEFAULT_VOICE_SEARCH_TRIGGERS));
+                }
+                if (voiceActions.has("searchStripTrailingPeriod")) {
+                    RamblerEnhancementsSettings.writeSearchStripTrailingPeriod(
+                            context,
+                            voiceActions.optBoolean(
+                                    "searchStripTrailingPeriod",
+                                    RamblerEnhancementsSettings.DEFAULT_SEARCH_STRIP_TRAILING_PERIOD));
+                }
+                if (voiceActions.has("autoSearchOnCommitEnabled")) {
+                    RamblerEnhancementsSettings.writeAutoSearchOnCommitEnabled(
+                            context,
+                            voiceActions.optBoolean(
+                                    "autoSearchOnCommitEnabled",
+                                    RamblerEnhancementsSettings.DEFAULT_AUTO_SEARCH_ON_COMMIT));
+                }
+                JSONArray autoSearchAppsArr = voiceActions.optJSONArray("autoSearchApps");
+                if (autoSearchAppsArr != null) {
+                    List<String> apps = new ArrayList<String>(autoSearchAppsArr.length());
+                    for (int i = 0; i < autoSearchAppsArr.length(); i++) {
+                        String pkg = autoSearchAppsArr.optString(i, "").trim();
+                        if (!pkg.isEmpty()) {
+                            apps.add(pkg);
+                        }
+                    }
+                    RamblerEnhancementsSettings.writeAutoSearchApps(context, apps);
                 }
                 restoredSections++;
             }

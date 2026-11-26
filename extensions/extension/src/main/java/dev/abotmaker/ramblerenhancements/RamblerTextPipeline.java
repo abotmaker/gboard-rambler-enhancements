@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
 import android.util.Log;
 import android.view.inputmethod.EditorInfo;
 
@@ -269,15 +270,32 @@ public final class RamblerTextPipeline {
             text = applyReplaceRules(text, packageName, readReplaceRules(context));
         }
 
-        // 4. Optional Strip Trailing Period (per-app override beats global setting).
-        if (!text.isEmpty() && shouldStripTrailingPeriod(context, packageName)) {
+        // 4. Optional Strip Trailing Period (per-app override > global toggle > search-bar auto-strip).
+        if (!text.isEmpty() && shouldStripTrailingPeriod(context, editorInfo, packageName)) {
             text = stripTrailingPeriod(text);
+        }
+
+        // 5. Optional Auto-Search on commit strictly inside user-selected apps (Search bars &
+        //    browser URI Go bars only; never fires on empty text or if a suffix already matched).
+        if (matchedAction == 0
+                && !text.trim().isEmpty()
+                && RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(context)
+                && RamblerEnhancementsSettings.isAutoSearchAppSelected(context, packageName)) {
+            int searchBarAction = supportedSearchBarAction(editorInfo);
+            if (searchBarAction != 0) {
+                matchedAction = searchBarAction;
+            }
         }
 
         return new ProcessedCommit(text, matchedAction);
     }
 
     public static boolean shouldStripTrailingPeriod(Context context, String packageName) {
+        return shouldStripTrailingPeriod(context, null, packageName);
+    }
+
+    public static boolean shouldStripTrailingPeriod(
+            Context context, EditorInfo editorInfo, String packageName) {
         if (context == null) {
             return false;
         }
@@ -291,7 +309,65 @@ public final class RamblerTextPipeline {
                 return false;
             }
         }
-        return RamblerEnhancementsSettings.readStripTrailingPeriod(context);
+        if (RamblerEnhancementsSettings.readStripTrailingPeriod(context)) {
+            return true;
+        }
+        return RamblerEnhancementsSettings.readSearchStripTrailingPeriod(context)
+                && isSearchBarField(editorInfo);
+    }
+
+    /**
+     * Returns {@link EditorInfo#IME_ACTION_SEARCH} for Search bars, or
+     * {@link EditorInfo#IME_ACTION_GO} for single-line browser address/search Omniboxes
+     * ({@link InputType#TYPE_CLASS_TEXT} + {@link InputType#TYPE_TEXT_VARIATION_URI}) when the
+     * field allows enter actions (no {@link EditorInfo#IME_FLAG_NO_ENTER_ACTION}).
+     * Returns {@code 0} for ordinary form inputs, password/email/numeric fields, and multi-line boxes.
+     */
+    public static int supportedSearchBarAction(EditorInfo editorInfo) {
+        if (editorInfo == null) {
+            return 0;
+        }
+        int opts = editorInfo.imeOptions;
+        if ((opts & EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0) {
+            return 0;
+        }
+        int action = opts & EditorInfo.IME_MASK_ACTION;
+        if (action == EditorInfo.IME_ACTION_SEARCH) {
+            return EditorInfo.IME_ACTION_SEARCH;
+        }
+        if (action == EditorInfo.IME_ACTION_GO && isBrowserUriSearchBar(editorInfo)) {
+            return EditorInfo.IME_ACTION_GO;
+        }
+        return 0;
+    }
+
+    /**
+     * Returns {@code true} when {@code editorInfo} represents a Search bar
+     * ({@link EditorInfo#IME_ACTION_SEARCH}) or a single-line browser URI/Omnibox bar
+     * ({@link EditorInfo#IME_ACTION_GO} + {@link InputType#TYPE_TEXT_VARIATION_URI}).
+     */
+    public static boolean isSearchBarField(EditorInfo editorInfo) {
+        if (editorInfo == null) {
+            return false;
+        }
+        int action = editorInfo.imeOptions & EditorInfo.IME_MASK_ACTION;
+        if (action == EditorInfo.IME_ACTION_SEARCH) {
+            return true;
+        }
+        return action == EditorInfo.IME_ACTION_GO && isBrowserUriSearchBar(editorInfo);
+    }
+
+    private static boolean isBrowserUriSearchBar(EditorInfo editorInfo) {
+        int inputType = editorInfo.inputType;
+        if ((inputType & InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) {
+            return false;
+        }
+        if ((inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
+                || (inputType & InputType.TYPE_TEXT_FLAG_IME_MULTI_LINE) != 0) {
+            return false;
+        }
+        int variation = inputType & InputType.TYPE_MASK_VARIATION;
+        return variation == InputType.TYPE_TEXT_VARIATION_URI;
     }
 
     /**

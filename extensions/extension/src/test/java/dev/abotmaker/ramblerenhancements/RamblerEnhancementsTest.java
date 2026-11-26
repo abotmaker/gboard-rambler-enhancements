@@ -1259,6 +1259,216 @@ public final class RamblerEnhancementsTest {
         }
     }
 
+    @Test
+    public void searchBarStripPeriodAndAppScopedAutoSearchWorkSafely() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerEnhancementsSettings.defaultPreferencesOrNull(context).edit().clear().commit();
+        RamblerTextPipeline.clearForTesting();
+        RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS = true;
+        RamblerDynamicConfig.PCN_GET_EDITOR_INFO_METHOD = "k";
+        RamblerDynamicConfig.PCN_PERFORM_ACTION_METHOD = "y";
+        RamblerFlagRuntime.seedApplicationContext(context);
+
+        final int[] dispatchCount = {0};
+        final int[] lastDispatched = {0};
+        RamblerTextPipeline.setActionDispatcherForTesting((p, action) -> {
+            dispatchCount[0]++;
+            lastDispatched[0] = action;
+            RamblerTextPipeline.invokePerformEditorAction(p, action);
+        });
+
+        try {
+            // Defaults: search-bar period strip ON, global period strip OFF, Auto-Search OFF, apps empty.
+            assertTrue(RamblerEnhancementsSettings.readSearchStripTrailingPeriod(context));
+            assertFalse(RamblerEnhancementsSettings.readStripTrailingPeriod(context));
+            assertFalse(RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(context));
+            assertTrue(RamblerEnhancementsSettings.readAutoSearchApps(context).isEmpty());
+
+            // 1. Auto-strip period in IME_ACTION_SEARCH fields while preserving abbreviations & normal fields.
+            android.view.inputmethod.EditorInfo ytSearch = new android.view.inputmethod.EditorInfo();
+            ytSearch.packageName = "com.google.android.youtube";
+            ytSearch.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH;
+            ytSearch.inputType = android.text.InputType.TYPE_CLASS_TEXT;
+            FakePcn ytPcn = new FakePcn(ytSearch);
+            assertEquals("lofi hip hop", RamblerTextPipeline.processCommitText(ytPcn, "lofi hip hop."));
+            assertEquals("Dr.", RamblerTextPipeline.processCommitText(ytPcn, "Dr."));
+            assertEquals("wait...", RamblerTextPipeline.processCommitText(ytPcn, "wait..."));
+            assertEquals(0, dispatchCount[0]); // Auto-search still OFF
+
+            // Browser Omnibox (IME_ACTION_GO + TYPE_TEXT_VARIATION_URI) strips trailing period too.
+            android.view.inputmethod.EditorInfo chromeOmnibox = new android.view.inputmethod.EditorInfo();
+            chromeOmnibox.packageName = "com.android.chrome";
+            chromeOmnibox.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_GO;
+            chromeOmnibox.inputType = android.text.InputType.TYPE_CLASS_TEXT
+                    | android.text.InputType.TYPE_TEXT_VARIATION_URI;
+            FakePcn chromeOmniPcn = new FakePcn(chromeOmnibox);
+            assertEquals("best ramen near me",
+                    RamblerTextPipeline.processCommitText(chromeOmniPcn, "best ramen near me."));
+            assertEquals(0, dispatchCount[0]);
+
+            // Ordinary chat/note/web-form fields keep their trailing period when global strip is OFF.
+            android.view.inputmethod.EditorInfo noteField = new android.view.inputmethod.EditorInfo();
+            noteField.packageName = "com.oneplus.note";
+            noteField.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_NONE;
+            noteField.inputType = android.text.InputType.TYPE_CLASS_TEXT;
+            assertEquals("Hello world.",
+                    RamblerTextPipeline.processCommitText(new FakePcn(noteField), "Hello world."));
+
+            android.view.inputmethod.EditorInfo chromeWebInput = new android.view.inputmethod.EditorInfo();
+            chromeWebInput.packageName = "com.android.chrome";
+            chromeWebInput.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_GO;
+            chromeWebInput.inputType = android.text.InputType.TYPE_CLASS_TEXT
+                    | android.text.InputType.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT;
+            assertEquals("Hello form.",
+                    RamblerTextPipeline.processCommitText(new FakePcn(chromeWebInput), "Hello form."));
+
+            // 2. Turn Auto-Search ON with NO selected apps -> MUST NOT fire anywhere!
+            RamblerEnhancementsSettings.writeAutoSearchOnCommitEnabled(context, true);
+            assertEquals("cats", RamblerTextPipeline.processCommitText(ytPcn, "cats."));
+            assertEquals(0, dispatchCount[0]);
+
+            // 3. User selects Chrome, YouTube, Play Store, and Settings.
+            RamblerEnhancementsSettings.writeAutoSearchApps(
+                    context,
+                    Arrays.asList(
+                            "com.android.chrome",
+                            "com.google.android.youtube",
+                            "com.android.vending",
+                            "com.android.settings"));
+
+            // YouTube search bar -> strips period & fires IME_ACTION_SEARCH!
+            assertEquals("android 16 tips",
+                    RamblerTextPipeline.processCommitText(ytPcn, "android 16 tips."));
+            assertEquals(1, dispatchCount[0]);
+            assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, lastDispatched[0]);
+            assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, ytPcn.lastPerformedAction);
+
+            // Play Store & Settings search bars -> fire IME_ACTION_SEARCH!
+            android.view.inputmethod.EditorInfo playSearch = new android.view.inputmethod.EditorInfo();
+            playSearch.packageName = "com.android.vending";
+            playSearch.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH;
+            FakePcn playPcn = new FakePcn(playSearch);
+            assertEquals("firefox", RamblerTextPipeline.processCommitText(playPcn, "firefox."));
+            assertEquals(2, dispatchCount[0]);
+            assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, playPcn.lastPerformedAction);
+
+            android.view.inputmethod.EditorInfo settingsSearch = new android.view.inputmethod.EditorInfo();
+            settingsSearch.packageName = "com.android.settings";
+            settingsSearch.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH;
+            FakePcn settingsPcn = new FakePcn(settingsSearch);
+            assertEquals("bluetooth", RamblerTextPipeline.processCommitText(settingsPcn, "bluetooth."));
+            assertEquals(3, dispatchCount[0]);
+            assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, settingsPcn.lastPerformedAction);
+
+            // Chrome Omnibox (IME_ACTION_GO + URI) -> strips period & fires IME_ACTION_GO!
+            assertEquals("weather tokyo",
+                    RamblerTextPipeline.processCommitText(chromeOmniPcn, "weather tokyo."));
+            assertEquals(4, dispatchCount[0]);
+            assertEquals(android.view.inputmethod.EditorInfo.IME_ACTION_GO, chromeOmniPcn.lastPerformedAction);
+
+            // Chrome ordinary web form <input type="text"> (IME_ACTION_GO + WEB_EDIT_TEXT) -> MUST NOT fire!
+            FakePcn webFormPcn = new FakePcn(chromeWebInput);
+            assertEquals("John Doe.", RamblerTextPipeline.processCommitText(webFormPcn, "John Doe."));
+            assertEquals(4, dispatchCount[0]);
+            assertEquals(0, webFormPcn.lastPerformedAction);
+
+            // Chrome password / multi-line / numeric IME_ACTION_GO -> MUST NOT fire!
+            android.view.inputmethod.EditorInfo multiLineUri = new android.view.inputmethod.EditorInfo();
+            multiLineUri.packageName = "com.android.chrome";
+            multiLineUri.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_GO;
+            multiLineUri.inputType = android.text.InputType.TYPE_CLASS_TEXT
+                    | android.text.InputType.TYPE_TEXT_VARIATION_URI
+                    | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE;
+            assertEquals("multiline.", RamblerTextPipeline.processCommitText(new FakePcn(multiLineUri), "multiline."));
+            assertEquals(4, dispatchCount[0]);
+
+            // Selected app (YouTube) non-search comment box (IME_ACTION_SEND) -> MUST NOT fire!
+            android.view.inputmethod.EditorInfo ytComment = new android.view.inputmethod.EditorInfo();
+            ytComment.packageName = "com.google.android.youtube";
+            ytComment.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND;
+            ytComment.inputType = android.text.InputType.TYPE_CLASS_TEXT;
+            assertEquals("Great video.", RamblerTextPipeline.processCommitText(new FakePcn(ytComment), "Great video."));
+            assertEquals(4, dispatchCount[0]);
+
+            // Unselected app (WhatsApp) even with IME_ACTION_SEARCH -> strips period but MUST NOT auto-search!
+            android.view.inputmethod.EditorInfo waSearch = new android.view.inputmethod.EditorInfo();
+            waSearch.packageName = "com.whatsapp";
+            waSearch.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH;
+            FakePcn waSearchPcn = new FakePcn(waSearch);
+            assertEquals("dinner receipt",
+                    RamblerTextPipeline.processCommitText(waSearchPcn, "dinner receipt."));
+            assertEquals(4, dispatchCount[0]);
+            assertEquals(0, waSearchPcn.lastPerformedAction);
+
+            // IME_FLAG_NO_ENTER_ACTION -> MUST NOT auto-search even in selected app!
+            android.view.inputmethod.EditorInfo noEnterSearch = new android.view.inputmethod.EditorInfo();
+            noEnterSearch.packageName = "com.google.android.youtube";
+            noEnterSearch.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+                    | android.view.inputmethod.EditorInfo.IME_FLAG_NO_ENTER_ACTION;
+            assertEquals("no enter",
+                    RamblerTextPipeline.processCommitText(new FakePcn(noEnterSearch), "no enter."));
+            assertEquals(4, dispatchCount[0]);
+
+            // Empty / whitespace commit -> MUST NOT auto-search!
+            assertEquals("   ", RamblerTextPipeline.processCommitText(ytPcn, "   "));
+            assertEquals(4, dispatchCount[0]);
+
+            // Voice Search suffix + Auto-Search together -> fires ONCE (no double submit)!
+            RamblerEnhancementsSettings.writeVoiceSearchEnabled(context, true);
+            assertEquals("pizza nearby",
+                    RamblerTextPipeline.processCommitText(ytPcn, "pizza nearby, hit search."));
+            assertEquals(5, dispatchCount[0]);
+
+            // Per-app stripTrailingPeriod OVERRIDE_OFF overrides search-bar period strip.
+            RamblerCustomInstructionRules.upsertRule(
+                    context,
+                    new RamblerCustomInstructionRules.Rule(
+                            "keep_dot",
+                            "Keep period",
+                            "",
+                            Collections.singletonList("com.google.android.youtube"),
+                            false,
+                            RamblerCustomInstructionRules.OVERRIDE_INHERIT,
+                            RamblerCustomInstructionRules.OVERRIDE_INHERIT,
+                            RamblerCustomInstructionRules.OVERRIDE_OFF));
+            assertEquals("keep my dot.",
+                    RamblerTextPipeline.processCommitText(ytPcn, "keep my dot."));
+            assertEquals(6, dispatchCount[0]); // Auto-search still works
+
+            // Turning searchStripTrailingPeriod OFF keeps trailing periods in unselected/non-overridden search bars.
+            RamblerEnhancementsSettings.writeSearchStripTrailingPeriod(context, false);
+            assertEquals("keep period.",
+                    RamblerTextPipeline.processCommitText(playPcn, "keep period."));
+            assertEquals(7, dispatchCount[0]);
+
+            // 4. JSON Backup & Restore round-trip preserves all 3 search-bar settings.
+            String backup = RamblerBackupManager.exportJson(context);
+            assertTrue(backup.contains("\"searchStripTrailingPeriod\": false"));
+            assertTrue(backup.contains("\"autoSearchOnCommitEnabled\": true"));
+            assertTrue(backup.contains("com.android.chrome"));
+            assertTrue(backup.contains("com.google.android.youtube"));
+
+            RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+            assertTrue(RamblerEnhancementsSettings.readSearchStripTrailingPeriod(context));
+            assertFalse(RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(context));
+            assertTrue(RamblerEnhancementsSettings.readAutoSearchApps(context).isEmpty());
+
+            assertTrue(RamblerBackupManager.importJson(context, backup).success);
+            assertFalse(RamblerEnhancementsSettings.readSearchStripTrailingPeriod(context));
+            assertTrue(RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(context));
+            assertEquals(
+                    new java.util.LinkedHashSet<String>(Arrays.asList(
+                            "com.android.chrome",
+                            "com.google.android.youtube",
+                            "com.android.vending",
+                            "com.android.settings")),
+                    RamblerEnhancementsSettings.readAutoSearchApps(context));
+        } finally {
+            RamblerTextPipeline.clearForTesting();
+        }
+    }
+
     @SuppressWarnings("unused")
     private static class FakeAbstractExtension {
         private final Context ctx;

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.4](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.3...v1.3.4) (2026-11-26)
+
+### ✨ New Features
+
+* **Smart Search Bars (Zero Extra Taps):**
+  * **Auto-strip period in search bars (ON by default):** Automatically removes stray trailing periods in Search bars and browser address bars (while preserving abbreviations like `Dr.`, `U.S.`, `e.g.`, `...`).
+  * **Auto-search on commit (opt-in, pick your own apps):** Dictate into Search bars or browser address bars (Chrome, YouTube, Play Store, Settings, etc.) and submit immediately without tapping Search or saying `"hit search"`. Strictly restricted to your selected apps and safe single-line Search / browser URI fields (never submits normal web forms, chats, or comment boxes).
+  * **How to activate:** **Rambler toolbar icon** (or **Gboard Settings → Voice typing → Rambler voice typing**) → **Voice actions, snippets & replace → Search bars** → toggle **Auto-search on commit** ON and pick your apps.
+  * Included in portable `.json` Backup & Restore.
+
 ## [1.3.3](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.2...v1.3.3) (2026-11-26)
 
 ### 🐛 Bug Fixes

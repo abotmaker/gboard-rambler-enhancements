@@ -4,13 +4,17 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
+import org.json.JSONArray;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -49,6 +53,12 @@ public final class RamblerEnhancementsSettings {
             "pref_rambler_voice_search_enabled";
     public static final String PREF_KEY_VOICE_SEARCH_TRIGGERS =
             "pref_rambler_voice_search_triggers";
+    public static final String PREF_KEY_SEARCH_STRIP_TRAILING_PERIOD =
+            "pref_rambler_search_strip_trailing_period";
+    public static final String PREF_KEY_AUTO_SEARCH_ON_COMMIT =
+            "pref_rambler_auto_search_on_commit";
+    public static final String PREF_KEY_AUTO_SEARCH_APPS =
+            "pref_rambler_auto_search_apps_v1";
     public static final String PREF_KEY_HISTORY_ENABLED =
             "pref_rambler_history_enabled";
     public static final String PREF_KEY_STATS_ENABLED =
@@ -87,6 +97,8 @@ public final class RamblerEnhancementsSettings {
     public static final String DEFAULT_VOICE_SEND_TRIGGERS = "hit send, send it";
     public static final boolean DEFAULT_VOICE_SEARCH_ENABLED = false;
     public static final String DEFAULT_VOICE_SEARCH_TRIGGERS = "hit search, search it";
+    public static final boolean DEFAULT_SEARCH_STRIP_TRAILING_PERIOD = true;
+    public static final boolean DEFAULT_AUTO_SEARCH_ON_COMMIT = false;
     public static final boolean DEFAULT_HISTORY_ENABLED = true;
     public static final boolean DEFAULT_STATS_ENABLED = true;
     public static final int DEFAULT_TYPING_BASELINE_WPM = 40;
@@ -339,6 +351,50 @@ public final class RamblerEnhancementsSettings {
                 context, PREF_KEY_VOICE_SEARCH_TRIGGERS, DEFAULT_VOICE_SEARCH_TRIGGERS);
     }
 
+    public static boolean readSearchStripTrailingPeriod(Context context) {
+        return readDedicatedBoolean(
+                context,
+                PREF_KEY_SEARCH_STRIP_TRAILING_PERIOD,
+                DEFAULT_SEARCH_STRIP_TRAILING_PERIOD);
+    }
+
+    public static boolean readAutoSearchOnCommitEnabled(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_AUTO_SEARCH_ON_COMMIT, DEFAULT_AUTO_SEARCH_ON_COMMIT);
+    }
+
+    public static Set<String> readAutoSearchApps(Context context) {
+        String raw = readDedicatedString(context, PREF_KEY_AUTO_SEARCH_APPS, "");
+        if (raw == null || raw.trim().isEmpty()) {
+            return Collections.emptySet();
+        }
+        try {
+            JSONArray array = new JSONArray(raw);
+            LinkedHashSet<String> out = new LinkedHashSet<String>();
+            for (int i = 0; i < array.length(); i++) {
+                String pkg = array.optString(i, "").trim();
+                if (!pkg.isEmpty()) {
+                    out.add(pkg);
+                }
+            }
+            return Collections.unmodifiableSet(out);
+        } catch (Throwable err) {
+            logWarningSafely("Failed to parse auto-search app list", err);
+            return Collections.emptySet();
+        }
+    }
+
+    public static boolean isAutoSearchAppSelected(Context context, String packageName) {
+        if (context == null || packageName == null) {
+            return false;
+        }
+        String trimmed = packageName.trim();
+        if (trimmed.isEmpty()) {
+            return false;
+        }
+        return readAutoSearchApps(context).contains(trimmed);
+    }
+
     public static boolean readHistoryEnabled(Context context) {
         return readDedicatedBoolean(
                 context, PREF_KEY_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED);
@@ -473,6 +529,30 @@ public final class RamblerEnhancementsSettings {
     public static boolean writeVoiceSearchTriggers(Context context, String triggers) {
         String normalized = triggers == null ? "" : triggers.trim();
         return writeDedicatedString(context, PREF_KEY_VOICE_SEARCH_TRIGGERS, normalized);
+    }
+
+    public static boolean writeSearchStripTrailingPeriod(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_SEARCH_STRIP_TRAILING_PERIOD, enabled);
+    }
+
+    public static boolean writeAutoSearchOnCommitEnabled(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_AUTO_SEARCH_ON_COMMIT, enabled);
+    }
+
+    public static boolean writeAutoSearchApps(Context context, Collection<String> packages) {
+        LinkedHashSet<String> cleaned = new LinkedHashSet<String>();
+        if (packages != null) {
+            for (String pkg : packages) {
+                if (pkg != null && !pkg.trim().isEmpty()) {
+                    cleaned.add(pkg.trim());
+                }
+            }
+        }
+        JSONArray array = new JSONArray();
+        for (String pkg : cleaned) {
+            array.put(pkg);
+        }
+        return writeDedicatedString(context, PREF_KEY_AUTO_SEARCH_APPS, array.toString());
     }
 
     public static boolean writeHistoryEnabled(Context context, boolean enabled) {
