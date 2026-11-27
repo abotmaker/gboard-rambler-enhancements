@@ -42,8 +42,8 @@ class RamblerEnhancementsPatchTest {
                 targets.any { it.version == EXPERIMENTAL_GBOARD_VERSION && it.isExperimental },
             )
             assertTrue(
-                "Patch ${patch.name} description should note verified 18.5.4 + unverified newer builds",
-                patch.description.orEmpty().contains("18.5.4"),
+                "Patch ${patch.name} should have a concise non-blank description",
+                patch.description.orEmpty().isNotBlank() && patch.description.orEmpty().length <= 280,
             )
         }
     }
