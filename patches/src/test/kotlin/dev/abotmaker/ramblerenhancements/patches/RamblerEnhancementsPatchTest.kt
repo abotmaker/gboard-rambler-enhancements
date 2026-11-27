@@ -1157,6 +1157,134 @@ class RamblerEnhancementsPatchTest {
         assertTrue(lpBranches["em"]!!.isNotEmpty())
     }
 
+    @Test
+    fun learnedFixesHooksInjectCleanlyAndRoundTripThroughDexPool() {
+        fun makeInputCtxChanged(className: String, regs: Int): app.morphe.patcher.util.proxy.mutableTypes.MutableClass {
+            val m = com.android.tools.smali.dexlib2.immutable.ImmutableMethod(
+                className,
+                "a",
+                listOf(
+                    com.android.tools.smali.dexlib2.immutable.ImmutableMethodParameter(
+                        "Lpdg;",
+                        emptySet(),
+                        null,
+                    ),
+                ),
+                "V",
+                com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value,
+                emptySet(),
+                emptySet(),
+                com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation(
+                    regs,
+                    listOf(
+                        com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction10x(
+                            com.android.tools.smali.dexlib2.Opcode.RETURN_VOID,
+                        ),
+                    ),
+                    emptyList(),
+                    emptyList(),
+                ),
+            )
+            return app.morphe.patcher.util.proxy.mutableTypes.MutableClass(
+                com.android.tools.smali.dexlib2.immutable.ImmutableClassDef(
+                    className,
+                    com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value,
+                    "Ljava/lang/Object;",
+                    emptyList(),
+                    null,
+                    emptySet(),
+                    emptyList(),
+                    listOf(m),
+                ),
+            )
+        }
+
+        val lowRegCls = makeInputCtxChanged("Lfhu;", 8)
+        val highRegCls = makeInputCtxChanged("LfhuHigh;", 22)
+        val onDeactivate = com.android.tools.smali.dexlib2.immutable.ImmutableMethod(
+            "Lfhv;",
+            "hj",
+            emptyList(),
+            "V",
+            com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value,
+            emptySet(),
+            emptySet(),
+            com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation(
+                4,
+                listOf(
+                    com.android.tools.smali.dexlib2.immutable.instruction.ImmutableInstruction10x(
+                        com.android.tools.smali.dexlib2.Opcode.RETURN_VOID,
+                    ),
+                ),
+                emptyList(),
+                emptyList(),
+            ),
+        )
+        val extCls = app.morphe.patcher.util.proxy.mutableTypes.MutableClass(
+            com.android.tools.smali.dexlib2.immutable.ImmutableClassDef(
+                "Lfhv;",
+                com.android.tools.smali.dexlib2.AccessFlags.PUBLIC.value,
+                "Ljava/lang/Object;",
+                emptyList(),
+                null,
+                emptySet(),
+                emptyList(),
+                listOf(onDeactivate),
+            ),
+        )
+
+        installLearnedFixesHooks(
+            LearnedFixesTargets(
+                onAppInputContextChangedMethod = lowRegCls.methods.single(),
+                onDeactivateMethod = extCls.methods.single(),
+            ),
+        )
+        installLearnedFixesHooks(
+            LearnedFixesTargets(
+                onAppInputContextChangedMethod = highRegCls.methods.single(),
+                onDeactivateMethod = null,
+            ),
+        )
+
+        val lowFirst = lowRegCls.methods.single().implementation!!.instructions.first()
+            as com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+        assertEquals(com.android.tools.smali.dexlib2.Opcode.INVOKE_STATIC, lowFirst.opcode)
+        assertEquals(
+            "onAppInputContextChanged",
+            (lowFirst.reference as com.android.tools.smali.dexlib2.iface.reference.MethodReference).name,
+        )
+
+        val highFirst = highRegCls.methods.single().implementation!!.instructions.first()
+            as com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+        assertEquals(com.android.tools.smali.dexlib2.Opcode.INVOKE_STATIC_RANGE, highFirst.opcode)
+        assertEquals(
+            "onAppInputContextChanged",
+            (highFirst.reference as com.android.tools.smali.dexlib2.iface.reference.MethodReference).name,
+        )
+
+        val deactFirst = extCls.methods.single().implementation!!.instructions.first()
+            as com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+        assertEquals(com.android.tools.smali.dexlib2.Opcode.INVOKE_STATIC, deactFirst.opcode)
+        assertEquals(
+            "onExtensionDeactivate",
+            (deactFirst.reference as com.android.tools.smali.dexlib2.iface.reference.MethodReference).name,
+        )
+
+        val pool = com.android.tools.smali.dexlib2.writer.pool.DexPool(
+            com.android.tools.smali.dexlib2.Opcodes.getDefault(),
+        )
+        pool.internClass(lowRegCls)
+        pool.internClass(highRegCls)
+        pool.internClass(extCls)
+        val store = com.android.tools.smali.dexlib2.writer.io.MemoryDataStore()
+        pool.writeTo(store)
+        val dex = com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile(
+            com.android.tools.smali.dexlib2.Opcodes.getDefault(),
+            com.android.tools.smali.dexlib2.dexbacked.DexBuffer(store.data),
+        )
+        assertEquals(3, dex.classes.size)
+    }
+
     private fun parseXml(xml: String) = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = true
     }.newDocumentBuilder().parse(InputSource(StringReader(xml)))

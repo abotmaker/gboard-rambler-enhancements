@@ -74,6 +74,9 @@ public final class RamblerDynamicConfig {
     // InputConnection wrapper interface methods (pcn in 18.5.4, aepw in 18.8.0)
     public static String PCN_GET_EDITOR_INFO_METHOD = "k";
     public static String PCN_PERFORM_ACTION_METHOD = "y";
+    public static String PCN_SURROUNDING_TEXT_METHOD = "l";
+    public static String PDX_BEFORE_CURSOR_METHOD = "n";
+    public static String PDX_AFTER_CURSOR_METHOD = "m";
 
     // Gboard Toolbar Access Point bindings (18.5.4 defaults; rewritten for 18.8.0+)
     public static String AP_CONTROLLER_CLASS = "mwv";

@@ -427,6 +427,8 @@ public final class RamblerEnhancementsActivity extends Activity {
             boolean autoSearchOn = RamblerEnhancementsSettings.readAutoSearchOnCommitEnabled(this);
             int autoSearchAppCount = RamblerEnhancementsSettings.readAutoSearchApps(this).size();
             boolean autoSearchActive = autoSearchOn && autoSearchAppCount > 0;
+            boolean autoLearnOn = RamblerEnhancementsSettings.readAutoLearnFixesEnabled(this);
+            int learnedActiveCount = RamblerLearnedFixes.readActiveFixes(this).size();
             int snippetCount = RamblerTextPipeline.readSnippets(this).size();
             int replaceCount = RamblerTextPipeline.readReplaceRules(this).size();
             String badge;
@@ -440,17 +442,26 @@ public final class RamblerEnhancementsActivity extends Activity {
                 badge = "Send ON";
             } else if (searchOn) {
                 badge = "Search ON";
+            } else if (learnedActiveCount > 0) {
+                badge = learnedActiveCount + " learned";
             } else if (snippetCount + replaceCount > 0) {
                 int total = snippetCount + replaceCount;
                 badge = total + (total == 1 ? " rule" : " rules");
+            } else if (autoLearnOn) {
+                badge = "Auto-learn ON";
             } else {
                 badge = "Off";
             }
             String autoSearchPart = autoSearchOn
                     ? ("Auto-search " + autoSearchAppCount + (autoSearchAppCount == 1 ? " app" : " apps"))
                     : "Auto-search OFF";
+            String autoLearnPart = autoLearnOn
+                    ? (learnedActiveCount > 0
+                            ? ("Auto-learn (" + learnedActiveCount + ")")
+                            : "Auto-learn ON")
+                    : "Auto-learn OFF";
             String summary = autoSearchPart
-                    + " · Send " + (sendOn ? "ON" : "OFF")
+                    + " · " + autoLearnPart
                     + " · " + snippetCount + (snippetCount == 1 ? " snippet" : " snippets")
                     + " · " + replaceCount + " replace";
             addRow("Voice actions, snippets & replace", summary, badge, true,
@@ -504,7 +515,7 @@ public final class RamblerEnhancementsActivity extends Activity {
         RamblerWaveformDialogs.Palette pal = RamblerWaveformDialogs.palette(this);
         TextView creditView = new TextView(this);
         creditView.setText(
-                "Waveforms ported from Hex by Anomaly (github.com/anomalyco/hex, MIT). "
+                "Waveforms & auto-learn ported from Hex by Anomaly (github.com/anomalyco/hex, MIT). "
                         + "Rambler enhancements adapted with credit to nl-morphe-patches (GPLv3) "
                         + "and designed to work alongside GboardWu.");
         creditView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
@@ -1066,6 +1077,69 @@ public final class RamblerEnhancementsActivity extends Activity {
                             refreshUi();
                         },
                         null));
+
+        addSectionHeader("Auto-learn from fixes");
+        boolean autoLearnOn = RamblerEnhancementsSettings.readAutoLearnFixesEnabled(this);
+        addToggleRow(
+                "Auto-learn from my fixes",
+                "Watches each dictation locally in memory for 60s (never in password fields). After you fix the same misheard word twice, Rambler learns it automatically and retires false rules if you later keep the original.",
+                autoLearnOn,
+                checked -> {
+                    RamblerEnhancementsSettings.writeAutoLearnFixesEnabled(this, checked);
+                    refreshUi();
+                });
+        if (autoLearnOn) {
+            addToggleRow(
+                    "Toast when auto-learned",
+                    "Show a brief notification whenever Rambler automatically learns a new fix.",
+                    RamblerEnhancementsSettings.readAutoLearnToastEnabled(this),
+                    checked -> {
+                        RamblerEnhancementsSettings.writeAutoLearnToastEnabled(this, checked);
+                        refreshUi();
+                    });
+        }
+        List<RamblerLearnedFixes.FixRecord> allLearnedRecords =
+                RamblerLearnedFixes.readRecords(this);
+        List<RamblerLearnedFixes.FixRecord> learnedList =
+                RamblerLearnedFixes.learned(allLearnedRecords);
+        java.util.Set<String> disabledLearnedIds = RamblerLearnedFixes.readDisabledIds(this);
+        int activeLearnedCount =
+                RamblerLearnedFixes.active(learnedList, disabledLearnedIds).size();
+        int pausedLearnedCount = Math.max(0, learnedList.size() - activeLearnedCount);
+        int trackingLearnedCount = RamblerLearnedFixes.tracking(allLearnedRecords).size();
+        String learnedBadge;
+        if (activeLearnedCount > 0) {
+            learnedBadge = activeLearnedCount + " active";
+        } else if (trackingLearnedCount > 0) {
+            learnedBadge = trackingLearnedCount + " tracking";
+        } else if (pausedLearnedCount > 0) {
+            learnedBadge = pausedLearnedCount + " paused";
+        } else {
+            learnedBadge = "0 learned";
+        }
+        String learnedSummary;
+        if (learnedList.isEmpty() && trackingLearnedCount == 0) {
+            learnedSummary = "No learned fixes yet. Fix a misheard word twice after dictating and Rambler will auto-learn it.";
+        } else {
+            List<String> learnedParts = new ArrayList<String>();
+            if (activeLearnedCount > 0) {
+                learnedParts.add(activeLearnedCount + " active");
+            }
+            if (pausedLearnedCount > 0) {
+                learnedParts.add(pausedLearnedCount + " paused");
+            }
+            if (trackingLearnedCount > 0) {
+                learnedParts.add(trackingLearnedCount + " tracking (1/2)");
+            }
+            learnedSummary = joinMiddleDot(learnedParts)
+                    + " · Tap to review, pause, promote, or delete.";
+        }
+        addRow(
+                "Learned fixes",
+                learnedSummary,
+                learnedBadge,
+                true,
+                () -> RamblerProductivityDialogs.showLearnedFixesDialog(this, this::refreshUi));
 
         addSectionHeader("Find & replace");
         List<RamblerTextPipeline.ReplaceRule> replaceRules =

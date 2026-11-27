@@ -134,10 +134,16 @@ public final class RamblerTextPipeline {
     public static final class ProcessedCommit {
         public final String text;
         public final int imeActionToTrigger; // 0 = none, IME_ACTION_SEND (4), IME_ACTION_SEARCH (3)
+        public final String textBeforeLearnedFixes;
 
         public ProcessedCommit(String text, int imeActionToTrigger) {
+            this(text, imeActionToTrigger, text);
+        }
+
+        public ProcessedCommit(String text, int imeActionToTrigger, String textBeforeLearnedFixes) {
             this.text = text == null ? "" : text;
             this.imeActionToTrigger = imeActionToTrigger;
+            this.textBeforeLearnedFixes = textBeforeLearnedFixes == null ? this.text : textBeforeLearnedFixes;
         }
     }
 
@@ -185,6 +191,7 @@ public final class RamblerTextPipeline {
             }
             String pkg = editorInfo == null ? null : editorInfo.packageName;
             RamblerFlagRuntime.onActivePackageChanged(ctx, pkg);
+            RamblerLearnedFixesTracker.onFieldChanged(ctx, editorInfo);
         } catch (Throwable throwable) {
             logWarningSafely("onExtensionActivate hook failed", throwable);
         }
@@ -209,6 +216,12 @@ public final class RamblerTextPipeline {
                     ? editorInfo.packageName
                     : RamblerFlagRuntime.getActivePackageName();
 
+            RamblerLearnedFixesTracker.SurroundingText preAnchors = null;
+            if (RamblerEnhancementsSettings.readAutoLearnFixesEnabled(ctx)
+                    && !RamblerLearnedFixesTracker.isSensitiveOrPasswordField(editorInfo)) {
+                preAnchors = RamblerLearnedFixesTracker.readAnchorsBeforeCommit(pcn);
+            }
+
             ProcessedCommit result = transformText(ctx, rawText, editorInfo, packageName);
 
             RamblerDictationStats.onDictationCommitted(ctx, result.text);
@@ -219,6 +232,15 @@ public final class RamblerTextPipeline {
                     recordHistory(ctx, packageName, trimmed, System.currentTimeMillis());
                 }
             }
+
+            RamblerLearnedFixesTracker.onDictationCommitted(
+                    ctx,
+                    pcn,
+                    editorInfo,
+                    result.textBeforeLearnedFixes,
+                    result.text,
+                    preAnchors,
+                    result.imeActionToTrigger != 0);
 
             if (result.imeActionToTrigger != 0 && pcn != null) {
                 dispatchImeAction(pcn, result.imeActionToTrigger);
@@ -266,8 +288,32 @@ public final class RamblerTextPipeline {
         }
 
         // 3. Post-dictation Find & Replace (plain or regex, global or per-app).
+        List<ReplaceRule> replaceRules = readReplaceRules(context);
         if (!text.isEmpty()) {
-            text = applyReplaceRules(text, packageName, readReplaceRules(context));
+            text = applyReplaceRules(text, packageName, replaceRules);
+        }
+
+        // 3.5. Auto-learned fixes (run after explicit Find & Replace so manual rules always win).
+        String textBeforeLearnedFixes = text;
+        if (!text.isEmpty() && RamblerEnhancementsSettings.readAutoLearnFixesEnabled(context)) {
+            List<RamblerLearnedFixes.FixRecord> activeFixes =
+                    RamblerLearnedFixes.readActiveFixes(context);
+            if (!activeFixes.isEmpty()) {
+                LinkedHashSet<String> manualFindKeys = new LinkedHashSet<String>();
+                for (ReplaceRule rule : replaceRules) {
+                    if (rule != null
+                            && rule.enabled
+                            && !rule.regex
+                            && !rule.find.isEmpty()
+                            && rule.appliesToPackage(packageName)) {
+                        String key = RamblerLearnedFixes.phraseKey(rule.find);
+                        if (!key.isEmpty()) {
+                            manualFindKeys.add(key);
+                        }
+                    }
+                }
+                text = RamblerLearnedFixes.apply(activeFixes, text, manualFindKeys);
+            }
         }
 
         // 4. Optional Strip Trailing Period (per-app override > global toggle > search-bar auto-strip).
@@ -287,7 +333,7 @@ public final class RamblerTextPipeline {
             }
         }
 
-        return new ProcessedCommit(text, matchedAction);
+        return new ProcessedCommit(text, matchedAction, textBeforeLearnedFixes);
     }
 
     public static boolean shouldStripTrailingPeriod(Context context, String packageName) {

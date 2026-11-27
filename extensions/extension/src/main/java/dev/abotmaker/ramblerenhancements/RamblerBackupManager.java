@@ -103,6 +103,10 @@ public final class RamblerBackupManager {
                     RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(context));
             behavior.put("spacebarLongPressMode",
                     RamblerEnhancementsSettings.readSpacebarLongPressMode(context));
+            behavior.put("autoLearnFixesEnabled",
+                    RamblerEnhancementsSettings.readAutoLearnFixesEnabled(context));
+            behavior.put("autoLearnToastEnabled",
+                    RamblerEnhancementsSettings.readAutoLearnToastEnabled(context));
             root.put("behavior", behavior);
 
             // 3. Hands-free voice actions
@@ -141,13 +145,21 @@ public final class RamblerBackupManager {
             customInstr.put("disabledApps", disabledArr);
             root.put("customInstructions", customInstr);
 
-            // 5. Snippets & Find/Replace rules
+            // 5. Snippets, Find/Replace & Auto-learned fixes
             root.put("snippets", new JSONArray(
                     RamblerTextPipeline.serializeSnippetsJson(
                             RamblerTextPipeline.readSnippets(context))));
             root.put("replaceRules", new JSONArray(
                     RamblerTextPipeline.serializeReplaceRulesJson(
                             RamblerTextPipeline.readReplaceRules(context))));
+            JSONObject learnedObj = new JSONObject();
+            learnedObj.put("records", new JSONArray(
+                    RamblerLearnedFixes.serializeRecordsJson(
+                            RamblerLearnedFixes.readRecords(context))));
+            learnedObj.put("disabledIds", new JSONArray(
+                    RamblerLearnedFixes.serializeDisabledIdsJson(
+                            RamblerLearnedFixes.readDisabledIds(context))));
+            root.put("learnedFixes", learnedObj);
 
             // 6. Voice dictionary (MUSE_STATS) words if store is ready
             List<String> dictWords = RamblerMuseStatsBridge.readWords(context);
@@ -300,6 +312,20 @@ public final class RamblerBackupManager {
                                     "spacebarLongPressMode",
                                     RamblerEnhancementsSettings.DEFAULT_SPACEBAR_LONG_PRESS_MODE));
                 }
+                if (behavior.has("autoLearnFixesEnabled")) {
+                    RamblerEnhancementsSettings.writeAutoLearnFixesEnabled(
+                            context,
+                            behavior.optBoolean(
+                                    "autoLearnFixesEnabled",
+                                    RamblerEnhancementsSettings.DEFAULT_AUTO_LEARN_FIXES));
+                }
+                if (behavior.has("autoLearnToastEnabled")) {
+                    RamblerEnhancementsSettings.writeAutoLearnToastEnabled(
+                            context,
+                            behavior.optBoolean(
+                                    "autoLearnToastEnabled",
+                                    RamblerEnhancementsSettings.DEFAULT_AUTO_LEARN_TOAST));
+                }
                 restoredSections++;
             }
 
@@ -391,6 +417,20 @@ public final class RamblerBackupManager {
                 RamblerTextPipeline.writeReplaceRules(
                         context,
                         RamblerTextPipeline.parseReplaceRulesJson(replaceArr.toString()));
+                restoredSections++;
+            }
+            JSONObject learnedObj = root.optJSONObject("learnedFixes");
+            if (learnedObj != null) {
+                JSONArray recArr = learnedObj.optJSONArray("records");
+                if (recArr != null) {
+                    RamblerLearnedFixes.writeRecords(
+                            context, RamblerLearnedFixes.parseRecordsJson(recArr.toString()));
+                }
+                JSONArray disArr = learnedObj.optJSONArray("disabledIds");
+                if (disArr != null) {
+                    RamblerLearnedFixes.writeDisabledIds(
+                            context, RamblerLearnedFixes.parseDisabledIdsJson(disArr.toString()));
+                }
                 restoredSections++;
             }
 

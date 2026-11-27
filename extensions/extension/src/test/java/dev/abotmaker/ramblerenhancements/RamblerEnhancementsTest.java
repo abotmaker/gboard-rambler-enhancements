@@ -40,11 +40,15 @@ public final class RamblerEnhancementsTest {
         RamblerCustomInstructionRules.clearForTesting();
         RamblerTextPipeline.clearForTesting();
         RamblerDictationStats.clearForTesting();
+        RamblerLearnedFixesTracker.clearForTesting();
         RamblerMuseStatsBridge.setBackendForTesting(null);
         RamblerDynamicConfig.AGENTIC_CONTEXT_FIELD = "b";
         RamblerDynamicConfig.AGENTIC_EDITOR_INFO_FIELD = "h";
         RamblerDynamicConfig.PCN_GET_EDITOR_INFO_METHOD = "k";
         RamblerDynamicConfig.PCN_PERFORM_ACTION_METHOD = "y";
+        RamblerDynamicConfig.PCN_SURROUNDING_TEXT_METHOD = "l";
+        RamblerDynamicConfig.PDX_BEFORE_CURSOR_METHOD = "n";
+        RamblerDynamicConfig.PDX_AFTER_CURSOR_METHOD = "m";
         RamblerDynamicConfig.FEATURE_WAVEFORM = false;
         RamblerDynamicConfig.FEATURE_CUSTOM_INSTRUCTIONS = false;
         RamblerDynamicConfig.FEATURE_PERSONAL_DICTIONARY = false;
@@ -1466,6 +1470,345 @@ public final class RamblerEnhancementsTest {
                     RamblerEnhancementsSettings.readAutoSearchApps(context));
         } finally {
             RamblerTextPipeline.clearForTesting();
+        }
+    }
+
+    @Test
+    public void learnedFixesClassifiesPromotesRetiresAndAppliesWithManualPrecedence() {
+        // 1. Single-word manual fix is extracted; leading/trailing additions are ignored as new writing.
+        RamblerLearnedFixes.DictationEdit edit1 = RamblerLearnedFixes.classifyEdit(
+                "open clod today",
+                "open clod today",
+                "open Claude today",
+                false);
+        assertEquals(RamblerLearnedFixes.Outcome.EDITED, edit1.outcome);
+        assertEquals(1, edit1.pairs.size());
+        assertEquals("clod", edit1.pairs.get(0).heard);
+        assertEquals("Claude", edit1.pairs.get(0).meant);
+
+        RamblerLearnedFixes.DictationEdit edgeWrite = RamblerLearnedFixes.classifyEdit(
+                "open clod today",
+                "open clod today",
+                "Hey open clod today please",
+                false);
+        assertEquals(RamblerLearnedFixes.Outcome.KEPT, edgeWrite.outcome);
+        assertTrue(edgeWrite.pairs.isEmpty());
+
+        // Sentence-start single capital is normalized away, while internal capitals (OpenAI) stay.
+        RamblerLearnedFixes.DictationEdit sentenceCap = RamblerLearnedFixes.classifyEdit(
+                "Clod works well",
+                "Clod works well",
+                "Cloud works well",
+                false);
+        assertEquals(1, sentenceCap.pairs.size());
+        assertEquals("cloud", sentenceCap.pairs.get(0).meant);
+
+        RamblerLearnedFixes.DictationEdit multiCap = RamblerLearnedFixes.classifyEdit(
+                "Open eye is fast",
+                "Open eye is fast",
+                "OpenAI is fast",
+                false);
+        assertEquals(1, multiCap.pairs.size());
+        assertEquals("OpenAI", multiCap.pairs.get(0).meant);
+
+        // Rewriting > 50% of words is treated as REWRITTEN, not a fix.
+        RamblerLearnedFixes.DictationEdit rewritten = RamblerLearnedFixes.classifyEdit(
+                "one two three four",
+                "one two three four",
+                "alpha beta gamma delta",
+                false);
+        assertEquals(RamblerLearnedFixes.Outcome.REWRITTEN, rewritten.outcome);
+        assertTrue(rewritten.pairs.isEmpty());
+
+        // Implausible unrelated replacement is filtered out.
+        RamblerLearnedFixes.DictationEdit implausible = RamblerLearnedFixes.classifyEdit(
+                "buy apple pie now",
+                "buy apple pie now",
+                "buy quantum pie now",
+                false);
+        assertEquals(RamblerLearnedFixes.Outcome.EDITED, implausible.outcome);
+        assertTrue(implausible.pairs.isEmpty());
+
+        // 2. Promotion threshold (2 consistent fixes) + contradiction auto-retirement.
+        List<RamblerLearnedFixes.FixRecord> records = Collections.emptyList();
+        records = RamblerLearnedFixes.merge(records, edit1, 1000L, Collections.<String>emptySet());
+        assertTrue(RamblerLearnedFixes.learned(records).isEmpty());
+        assertEquals(1, RamblerLearnedFixes.tracking(records).size());
+
+        RamblerLearnedFixes.DictationEdit edit2 = RamblerLearnedFixes.classifyEdit(
+                "ask clod about it",
+                "ask clod about it",
+                "ask Claude about it",
+                false);
+        records = RamblerLearnedFixes.merge(records, edit2, 2000L, Collections.<String>emptySet());
+        List<RamblerLearnedFixes.FixRecord> learned = RamblerLearnedFixes.learned(records);
+        assertEquals(1, learned.size());
+        assertEquals("clod", learned.get(0).heard);
+        assertEquals("Claude", learned.get(0).meant);
+        assertEquals(2, learned.get(0).count);
+        assertTrue(RamblerLearnedFixes.tracking(records).isEmpty());
+
+        // 3. Apply respects whole-word boundaries, case preservation, and manual Find & Replace precedence.
+        assertEquals("Ask Claude now.", RamblerLearnedFixes.apply(learned, "Ask clod now."));
+        assertEquals("ASK CLAUDE NOW", RamblerLearnedFixes.apply(learned, "ASK CLOD NOW"));
+        assertEquals("https://clod.dev clod_var @clod my-clod",
+                RamblerLearnedFixes.apply(learned, "https://clod.dev clod_var @clod my-clod"));
+        assertEquals("Ask clod now.",
+                RamblerLearnedFixes.apply(learned, "Ask clod now.", Collections.singleton("clod")));
+
+        // Disabled fix is protected from contradictions while paused.
+        String fixId = learned.get(0).id();
+        RamblerLearnedFixes.DictationEdit keptHeard = RamblerLearnedFixes.classifyEdit(
+                "a clod of dirt",
+                "a clod of dirt",
+                "a clod of dirt",
+                false);
+        List<RamblerLearnedFixes.FixRecord> whilePaused =
+                RamblerLearnedFixes.merge(records, keptHeard, 3000L, Collections.singleton(fixId));
+        assertEquals(1, RamblerLearnedFixes.learned(whilePaused).size());
+        assertTrue(RamblerLearnedFixes.active(
+                RamblerLearnedFixes.learned(whilePaused), Collections.singleton(fixId)).isEmpty());
+
+        // Unpaused contradiction auto-retires the fix.
+        List<RamblerLearnedFixes.FixRecord> retired =
+                RamblerLearnedFixes.merge(records, keptHeard, 4000L, Collections.<String>emptySet());
+        assertTrue(RamblerLearnedFixes.learned(retired).isEmpty());
+    }
+
+    @Test
+    public void learnedFixesTrackerEndToEndLearnsRedictatesSkipsPasswordsAndShowsToast() {
+        Context context = RuntimeEnvironment.getApplication();
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        RamblerDynamicConfig.FEATURE_PRODUCTIVITY_TOOLS = true;
+        RamblerFlagRuntime.seedAndRefreshIfNeeded(context);
+
+        final long[] elapsed = {10_000L};
+        final long[] wall = {1_700_000_000_000L};
+        RamblerLearnedFixesTracker.setClockForTesting(new RamblerLearnedFixesTracker.Clock() {
+            @Override
+            public long elapsedRealtime() {
+                return elapsed[0];
+            }
+
+            @Override
+            public long currentTimeMillis() {
+                return wall[0];
+            }
+        });
+        List<String> toasts = new java.util.ArrayList<String>();
+        RamblerLearnedFixesTracker.setToastNotifierForTesting(
+                (ctx, msg) -> toasts.add(msg));
+
+        android.view.inputmethod.EditorInfo chatEditor = new android.view.inputmethod.EditorInfo();
+        chatEditor.packageName = "com.whatsapp";
+        chatEditor.fieldId = 101;
+        chatEditor.inputType = android.text.InputType.TYPE_CLASS_TEXT;
+
+        FakeSurroundingPcn pcn = new FakeSurroundingPcn(chatEditor);
+        pcn.before = "Hey ";
+        pcn.after = "";
+
+        // Dictation 1: "use clod daily" -> user corrects to "use Claude daily" -> settled by voice start.
+        assertEquals("use clod daily", RamblerTextPipeline.processCommitText(pcn, "use clod daily"));
+        pcn.before = "Hey use clod daily";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+        elapsed[0] += 3000L;
+        pcn.before = "Hey use Claude daily";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+        elapsed[0] += 1000L;
+        RamblerDictationStats.onVoiceStart();
+
+        assertEquals(0, RamblerLearnedFixes.readActiveFixes(context).size());
+        assertEquals(1, RamblerLearnedFixes.tracking(RamblerLearnedFixes.readRecords(context)).size());
+        assertTrue(toasts.isEmpty());
+
+        // Dictation 2: "ask clod now" -> user corrects to "ask Claude now" -> settled by deactivate -> LEARNED + TOAST!
+        pcn.before = "Next: ";
+        pcn.after = "";
+        assertEquals("ask clod now", RamblerTextPipeline.processCommitText(pcn, "ask clod now"));
+        pcn.before = "Next: ask clod now";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+        elapsed[0] += 2000L;
+        pcn.before = "Next: ask Claude now";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+        elapsed[0] += 500L;
+        RamblerLearnedFixesTracker.onExtensionDeactivate();
+
+        List<RamblerLearnedFixes.FixRecord> active = RamblerLearnedFixes.readActiveFixes(context);
+        assertEquals(1, active.size());
+        assertEquals("clod", active.get(0).heard);
+        assertEquals("Claude", active.get(0).meant);
+        assertEquals(
+                Collections.singletonList("Rambler learned: \"clod\" \u2192 \"Claude\""),
+                toasts);
+
+        // Dictation 3: "try clod again" is now automatically fixed to "try Claude again"!
+        pcn.before = "";
+        pcn.after = "";
+        assertEquals("try Claude again", RamblerTextPipeline.processCommitText(pcn, "try clod again"));
+        RamblerLearnedFixesTracker.finishTracking();
+
+        // Toast mute toggle: turning off autoLearnToastEnabled still learns, with no new toast.
+        RamblerEnhancementsSettings.writeAutoLearnToastEnabled(context, false);
+        for (int round = 0; round < 2; round++) {
+            pcn.before = "Msg " + round + ": ";
+            pcn.after = "";
+            RamblerTextPipeline.processCommitText(pcn, "open g board now");
+            pcn.before = "Msg " + round + ": open g board now";
+            RamblerLearnedFixesTracker.onAppInputContextChanged(
+                    new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+            elapsed[0] += 1500L;
+            pcn.before = "Msg " + round + ": open Gboard now";
+            RamblerLearnedFixesTracker.onAppInputContextChanged(
+                    new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+            RamblerLearnedFixesTracker.onExtensionDeactivate();
+        }
+        assertEquals(2, RamblerLearnedFixes.readActiveFixes(context).size());
+        assertEquals(1, toasts.size()); // Still only the original toast!
+
+        // Delete-and-redictate within 20s vs app clearing field on Send.
+        pcn.before = "";
+        pcn.after = "";
+        RamblerTextPipeline.processCommitText(pcn, "try ramble now");
+        pcn.before = "try ramble now";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+        elapsed[0] += 2000L;
+        pcn.before = "";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg("", "", FakePdgReason.DELETE));
+        elapsed[0] += 3000L;
+        RamblerTextPipeline.processCommitText(pcn, "try Rambler now");
+        RamblerLearnedFixesTracker.finishTracking();
+
+        List<RamblerLearnedFixes.FixRecord> trackingAfterRedict =
+                RamblerLearnedFixes.tracking(RamblerLearnedFixes.readRecords(context));
+        assertTrue(trackingAfterRedict.stream().anyMatch(
+                r -> "ramble".equals(r.heard) && "Rambler".equals(r.meant)));
+
+        // App clears field on Send (OTHER_TEXT_CHANGE, NOT DELETE) -> must NOT pair with next dictation!
+        pcn.before = "";
+        RamblerTextPipeline.processCommitText(pcn, "see you soon");
+        pcn.before = "see you soon";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pcn.before, "", FakePdgReason.IME));
+        elapsed[0] += 1000L;
+        pcn.before = "";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg("", "", FakePdgReason.OTHER_TEXT_CHANGE));
+        elapsed[0] += 2000L;
+        RamblerTextPipeline.processCommitText(pcn, "see you noon");
+        RamblerLearnedFixesTracker.finishTracking();
+        assertFalse(RamblerLearnedFixes.readRecords(context).stream().anyMatch(
+                r -> "soon".equals(r.heard) && "noon".equals(r.meant)));
+
+        // Password and incognito fields are strictly skipped.
+        android.view.inputmethod.EditorInfo pwEditor = new android.view.inputmethod.EditorInfo();
+        pwEditor.inputType = android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD;
+        assertTrue(RamblerLearnedFixesTracker.isSensitiveOrPasswordField(pwEditor));
+        android.view.inputmethod.EditorInfo incognitoEditor = new android.view.inputmethod.EditorInfo();
+        incognitoEditor.inputType = android.text.InputType.TYPE_CLASS_TEXT;
+        incognitoEditor.imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING;
+        assertTrue(RamblerLearnedFixesTracker.isSensitiveOrPasswordField(incognitoEditor));
+
+        FakeSurroundingPcn pwPcn = new FakeSurroundingPcn(pwEditor);
+        RamblerTextPipeline.processCommitText(pwPcn, "secret wrd");
+        pwPcn.before = "secret word";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pwPcn.before, "", FakePdgReason.IME));
+        RamblerLearnedFixesTracker.finishTracking();
+        assertFalse(RamblerLearnedFixes.readRecords(context).stream().anyMatch(
+                r -> "wrd".equals(r.heard)));
+
+        // Backup & restore round-trip preserves toggles, records, and paused IDs.
+        String clodId = RamblerLearnedFixes.fixId("clod", "Claude");
+        RamblerLearnedFixes.setFixDisabled(context, clodId, true);
+        String backup = RamblerBackupManager.exportJson(context);
+        assertTrue(backup.contains("\"autoLearnFixesEnabled\": true"));
+        assertTrue(backup.contains("\"autoLearnToastEnabled\": false"));
+        assertTrue(backup.contains("\"learnedFixes\""));
+        assertTrue(backup.contains("Claude"));
+
+        RamblerEnhancementsSettings.preferencesOrNull(context).edit().clear().commit();
+        assertTrue(RamblerLearnedFixes.readRecords(context).isEmpty());
+        assertTrue(RamblerEnhancementsSettings.readAutoLearnToastEnabled(context));
+
+        assertTrue(RamblerBackupManager.importJson(context, backup).success);
+        assertTrue(RamblerEnhancementsSettings.readAutoLearnFixesEnabled(context));
+        assertFalse(RamblerEnhancementsSettings.readAutoLearnToastEnabled(context));
+        assertTrue(RamblerLearnedFixes.readDisabledIds(context).contains(clodId));
+        assertEquals(1, RamblerLearnedFixes.readActiveFixes(context).size());
+        assertEquals("Gboard", RamblerLearnedFixes.readActiveFixes(context).get(0).meant);
+    }
+
+    private enum FakePdgReason {
+        UNKNOWN, IME, DELETE, OTHER_TEXT_CHANGE
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakePdx {
+        private final String before;
+        private final String after;
+
+        FakePdx(String before, String after) {
+            this.before = before;
+            this.after = after;
+        }
+
+        public CharSequence n() {
+            return before;
+        }
+
+        public CharSequence m() {
+            return after;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakePdl {
+        final FakePdgReason i;
+
+        FakePdl(FakePdgReason reason) {
+            this.i = reason;
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static final class FakePdg {
+        final FakePdl b;
+        final FakePdx c;
+
+        FakePdg(String before, String after, FakePdgReason reason) {
+            this.b = new FakePdl(reason);
+            this.c = new FakePdx(before, after);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public static final class FakeSurroundingPcn {
+        final android.view.inputmethod.EditorInfo editorInfo;
+        String before = "";
+        String after = "";
+
+        FakeSurroundingPcn(android.view.inputmethod.EditorInfo editorInfo) {
+            this.editorInfo = editorInfo;
+        }
+
+        public android.view.inputmethod.EditorInfo k() {
+            return editorInfo;
+        }
+
+        public FakePdx l(int beforeLen, int afterLen, int flags) {
+            String b = before.length() > beforeLen
+                    ? before.substring(before.length() - beforeLen)
+                    : before;
+            String a = after.length() > afterLen ? after.substring(0, afterLen) : after;
+            return new FakePdx(b, a);
         }
     }
 

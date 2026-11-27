@@ -21,7 +21,7 @@ Standalone [Morphe](https://morphe.software) patches for **Gboard Rambler** — 
 | Patch | What it adds |
 |---|---|
 | **Waveform Animation** | Hex Dot Scope & Android Wave (listening), Flow / Pulse / Sweep (processing), custom colors & glow tuning |
-| **Productivity Tools** | Long-press Spacebar trigger *(Smart Hybrid / Hold / Toggle)*, Smart Search Bars *(auto-strip period & per-app Auto-Search)*, Rambler toolbar button, Voice Send/Search, Snippets, Find & Replace, private Stats & History with 1-Tap Fix & Learn, Auto Retry, Longer Sessions, JSON Backup |
+| **Productivity Tools** | Long-press Spacebar trigger *(Smart Hybrid / Hold / Toggle)*, Auto-Learn From Fixes *(with toast & review UI)*, Smart Search Bars *(auto-strip period & per-app Auto-Search)*, Rambler toolbar button, Voice Send/Search, Snippets, Find & Replace, private Stats & History with 1-Tap Fix & Learn, Auto Retry, Longer Sessions, JSON Backup |
 | **Custom Instructions** | Default + per-app prompts, named rules, searchable app picker, disabled apps & per-app behavior overrides |
 | **Personal Dictionary** | Live `MUSE_STATS` voice dictionary with add, `.txt` import/export, remove & clear |
 | **Contact Names** | Auto-seeds up to 1,000 phone contacts into `MUSE_STATS` *(requires Personal Dictionary)* |
@@ -42,5 +42,5 @@ Standalone [Morphe](https://morphe.software) patches for **Gboard Rambler** — 
 
 ## Credits & License
 
-- Waveforms ported from [Hex by Anomaly](https://github.com/anomalyco/hex) (MIT — [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md))
+- Waveforms & Auto-Learn From Fixes ported from [Hex by Anomaly](https://github.com/anomalyco/hex) (MIT — [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md))
 - Rambler patches adapted from [`nl-morphe-patches`](https://gitlab.com/johninnld/nl-morphe-patches) · Built for [Morphe](https://morphe.software) & [GboardWu](https://github.com/jasonwu1994/Gboard-patches) · **[GPL v3.0](LICENSE)**

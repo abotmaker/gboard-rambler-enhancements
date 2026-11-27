@@ -71,6 +71,10 @@ public final class RamblerEnhancementsSettings {
             "pref_rambler_spacebar_long_press_rambler";
     public static final String PREF_KEY_SPACEBAR_LONG_PRESS_MODE =
             "pref_rambler_spacebar_long_press_mode";
+    public static final String PREF_KEY_AUTO_LEARN_FIXES =
+            "pref_rambler_auto_learn_fixes";
+    public static final String PREF_KEY_AUTO_LEARN_TOAST =
+            "pref_rambler_auto_learn_toast";
     public static final String PREF_KEY_SEEDED_CONTACTS =
             "pref_rambler_contacts_seeded_names";
 
@@ -110,6 +114,8 @@ public final class RamblerEnhancementsSettings {
     public static final String SPACEBAR_MODE_HOLD = "hold";
     public static final String SPACEBAR_MODE_TOGGLE = "toggle";
     public static final String DEFAULT_SPACEBAR_LONG_PRESS_MODE = SPACEBAR_MODE_HYBRID;
+    public static final boolean DEFAULT_AUTO_LEARN_FIXES = true;
+    public static final boolean DEFAULT_AUTO_LEARN_TOAST = true;
 
     private static final ThreadLocal<Boolean> IN_GBOARD_PREFS_LOOKUP = new ThreadLocal<Boolean>();
     private static volatile GboardPrefsBridge cachedGboardBridge;
@@ -434,6 +440,16 @@ public final class RamblerEnhancementsSettings {
                 DEFAULT_SPACEBAR_LONG_PRESS_MODE));
     }
 
+    public static boolean readAutoLearnFixesEnabled(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_AUTO_LEARN_FIXES, DEFAULT_AUTO_LEARN_FIXES);
+    }
+
+    public static boolean readAutoLearnToastEnabled(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_AUTO_LEARN_TOAST, DEFAULT_AUTO_LEARN_TOAST);
+    }
+
     public static int readTypingBaselineWpm(Context context) {
         SharedPreferences prefs = preferencesOrNull(context);
         if (prefs == null) {
@@ -576,6 +592,17 @@ public final class RamblerEnhancementsSettings {
                 context,
                 PREF_KEY_SPACEBAR_LONG_PRESS_MODE,
                 normalizeSpacebarLongPressMode(mode));
+    }
+
+    public static boolean writeAutoLearnFixesEnabled(Context context, boolean enabled) {
+        if (!enabled) {
+            RamblerLearnedFixesTracker.finishTracking();
+        }
+        return writeDedicatedBoolean(context, PREF_KEY_AUTO_LEARN_FIXES, enabled);
+    }
+
+    public static boolean writeAutoLearnToastEnabled(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_AUTO_LEARN_TOAST, enabled);
     }
 
     public static boolean writeTypingBaselineWpm(Context context, int wpm) {

@@ -218,7 +218,7 @@ val ramblerAppContextPatch = bytecodePatch(
 @Suppress("unused")
 val ramblerProductivityToolsPatch = bytecodePatch(
     name = "Rambler Productivity Tools",
-    description = "Long-press Spacebar trigger, Smart Search Bars (auto-strip period & per-app Auto-Search), Rambler toolbar button, Voice Send/Search, Snippets, Find & Replace, private Stats & History with 1-Tap Fix & Learn, Auto Retry, Longer Sessions, and JSON Backup.",
+    description = "Long-press Spacebar trigger, Auto-Learn From Fixes, Smart Search Bars, Rambler toolbar button, Voice Send/Search, Snippets, Find & Replace, private Stats & History with 1-Tap Fix & Learn, Auto Retry, Longer Sessions, and JSON Backup.",
     default = true,
 ) {
     compatibleWith(COMPATIBILITY_GBOARD)

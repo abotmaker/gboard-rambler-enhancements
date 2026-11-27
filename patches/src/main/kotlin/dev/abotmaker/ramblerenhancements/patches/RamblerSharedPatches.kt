@@ -68,6 +68,8 @@ internal const val TOOLBAR_ACCESS_POINT_TYPE =
     "Ldev/abotmaker/ramblerenhancements/RamblerToolbarAccessPoint;"
 internal const val SPACEBAR_TRIGGER_TYPE =
     "Ldev/abotmaker/ramblerenhancements/RamblerSpacebarTrigger;"
+internal const val LEARNED_FIXES_TRACKER_TYPE =
+    "Ldev/abotmaker/ramblerenhancements/RamblerLearnedFixesTracker;"
 
 internal enum class RamblerFeature {
     WAVEFORM,
@@ -92,6 +94,7 @@ internal class RamblerPatchRunState {
     var activateHookTargets: ActivateHookTargets? = null
     var commitPipelineTargets: CommitPipelineTargets? = null
     var voiceLifecycleTargets: VoiceLifecycleTargets? = null
+    var learnedFixesTargets: LearnedFixesTargets? = null
     var accessPointTargets: AccessPointTargets? = null
     var spacebarTriggerTargets: SpacebarTriggerTargets? = null
     var agenticCtorHooked: Boolean = false
@@ -207,6 +210,12 @@ internal val ramblerSharedExtensionPatch = bytecodePatch(
             val lifecycleTargets = RamblerDynamicResolver.resolveVoiceLifecycleTargets(agentic.extensionClass)
             state.voiceLifecycleTargets = lifecycleTargets
             installVoiceLifecycleStatsHooks(lifecycleTargets)
+            val learnedTargets = RamblerDynamicResolver.resolveLearnedFixesTargets(
+                this,
+                agentic.extensionClass,
+            )
+            state.learnedFixesTargets = learnedTargets
+            installLearnedFixesHooks(learnedTargets)
         }
 
         val prefLaunch = RamblerDynamicResolver.resolvePreferenceLaunchTargets(this)
@@ -266,6 +275,26 @@ internal fun installVoiceLifecycleStatsHooks(targets: VoiceLifecycleTargets) {
         0,
         "invoke-static {}, $DICTATION_STATS_TYPE->onListeningStop()V",
     )
+}
+
+internal fun installLearnedFixesHooks(targets: LearnedFixesTargets) {
+    val ctxChanged = targets.onAppInputContextChangedMethod
+    val ctxImpl = ctxChanged?.implementation
+    if (ctxChanged != null && ctxImpl != null) {
+        val invoke = if (ctxImpl.registerCount <= 16) {
+            "invoke-static {p1}, $LEARNED_FIXES_TRACKER_TYPE->onAppInputContextChanged(Ljava/lang/Object;)V"
+        } else {
+            "invoke-static/range {p1 .. p1}, $LEARNED_FIXES_TRACKER_TYPE->onAppInputContextChanged(Ljava/lang/Object;)V"
+        }
+        ctxChanged.addInstructions(0, invoke)
+    }
+    val onDeactivate = targets.onDeactivateMethod
+    if (onDeactivate?.implementation != null) {
+        onDeactivate.addInstructions(
+            0,
+            "invoke-static {}, $LEARNED_FIXES_TRACKER_TYPE->onExtensionDeactivate()V",
+        )
+    }
 }
 
 internal fun installToolbarAccessPointHooks(targets: AccessPointTargets) {
@@ -663,6 +692,10 @@ internal fun rewriteDynamicConfigClinitOnClass(
     val pipeline = state.commitPipelineTargets
     putStr("PCN_GET_EDITOR_INFO_METHOD", pipeline?.pcnGetEditorInfoMethod ?: "k")
     putStr("PCN_PERFORM_ACTION_METHOD", pipeline?.pcnPerformActionMethod ?: "y")
+    val spacing = state.appendSpacingTargets
+    putStr("PCN_SURROUNDING_TEXT_METHOD", spacing?.surroundingMethodName ?: "l")
+    putStr("PDX_BEFORE_CURSOR_METHOD", spacing?.beforeCursorMethodName ?: "n")
+    putStr("PDX_AFTER_CURSOR_METHOD", spacing?.afterCursorMethodName ?: "m")
 
     // Gboard Toolbar Access Point bindings (resolved or 18.5.4 defaults)
     val ap = state.accessPointTargets
@@ -840,7 +873,7 @@ internal val ramblerSharedSettingsResourcePatch = resourcePatch(
                     "Append-only, cursor editing, app context, trailing period, auto retry, and max duration",
                 "rambler_enh_pref_productivity_title" to "Voice actions, snippets & replace",
                 "rambler_enh_pref_productivity_summary" to
-                    "Hands-free send/search suffixes, voice snippets, and find & replace rules",
+                    "Hands-free send/search, auto-learned fixes, voice snippets, and find & replace",
                 "rambler_enh_pref_dictionary_title" to "Voice dictionary & contacts",
                 "rambler_enh_pref_dictionary_summary" to
                     "MUSE_STATS biasing words, import/export, and phone contact names sync",
@@ -945,7 +978,7 @@ private fun zhHantSettingsStrings(): List<Pair<String, String>> = listOf(
     "rambler_enh_pref_behavior_title" to "聽寫行為與連線穩定性",
     "rambler_enh_pref_behavior_summary" to "僅附加、游標編輯、應用程式情境、去句號、弱網重試與最長時限",
     "rambler_enh_pref_productivity_title" to "語音動作、片語與取代",
-    "rambler_enh_pref_productivity_summary" to "語音送出/搜尋後綴、固定語音片語與尋找取代規則",
+    "rambler_enh_pref_productivity_summary" to "語音送出/搜尋、自動學習修正、固定語音片語與尋找取代規則",
     "rambler_enh_pref_dictionary_title" to "語音辭典與聯絡人",
     "rambler_enh_pref_dictionary_summary" to "MUSE_STATS 詞彙管理、匯入/匯出與手機聯絡人同步",
     "rambler_enh_pref_history_title" to "聽寫統計與本機紀錄",

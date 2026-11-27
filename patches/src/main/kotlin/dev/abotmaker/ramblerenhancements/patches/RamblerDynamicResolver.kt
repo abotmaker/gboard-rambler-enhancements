@@ -130,6 +130,11 @@ internal data class VoiceLifecycleTargets(
     val onListeningStopMethod: MutableMethod,
 )
 
+internal data class LearnedFixesTargets(
+    val onAppInputContextChangedMethod: MutableMethod?,
+    val onDeactivateMethod: MutableMethod?,
+)
+
 internal data class AccessPointTargets(
     val orderFactoryMethod: MutableMethod,
     val controllerConstructor: MutableMethod,
@@ -734,6 +739,42 @@ internal object RamblerDynamicResolver {
         return VoiceLifecycleTargets(
             onVoiceStartMethod = onVoiceStart,
             onListeningStopMethod = onListeningStop,
+        )
+    }
+
+    fun resolveLearnedFixesTargets(
+        context: BytecodePatchContext,
+        extensionClass: MutableClass,
+    ): LearnedFixesTargets {
+        var onAppInputContextChanged: MutableMethod? = null
+        context.classDefForEach { cls ->
+            if (onAppInputContextChanged != null) return@classDefForEach
+            val match = cls.methods.firstOrNull { method ->
+                (method.accessFlags and AccessFlags.STATIC.value) == 0 &&
+                    method.parameterTypes.size == 1 &&
+                    method.parameterTypes.first().toString().startsWith("L") &&
+                    method.returnType == "V" &&
+                    method.containsString("onAppInputContextChanged") &&
+                    method.containsString("InputContext cleared due to: %s")
+            }
+            if (match != null) {
+                val mutableCls = context.mutableClassDefBy(cls.type)
+                onAppInputContextChanged = mutableCls.methods.firstOrNull { m ->
+                    m.name == match.name &&
+                        m.parameterTypes.map { it.toString() } == match.parameterTypes.map { it.toString() } &&
+                        m.returnType == match.returnType
+                }
+            }
+        }
+        val onDeactivate = extensionClass.methods.singleOrNull { method ->
+            (method.accessFlags and AccessFlags.STATIC.value) == 0 &&
+                method.parameterTypes.isEmpty() &&
+                method.returnType == "V" &&
+                method.containsString("onDeactivate")
+        }
+        return LearnedFixesTargets(
+            onAppInputContextChangedMethod = onAppInputContextChanged,
+            onDeactivateMethod = onDeactivate,
         )
     }
 

@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.5](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.4...v1.3.5) (2026-11-27)
+
+### ✨ New Features
+
+* **Auto "Learn From My Fixes" (adapted from Hex by Anomaly, MIT):**
+  * Silently watches each Rambler dictation locally in memory for 60s using 32-character before/after text anchors (never active in password or incognito/`IME_FLAG_NO_PERSONALIZED_LEARNING` fields).
+  * Detects manual word fixes and quick delete-and-redictate corrections (within 20s, while cleanly ignoring apps clearing the box on Send).
+  * After **2 consistent corrections** with zero contradictions, automatically promotes the 1–3 word pair into an active whole-word replacement rule (preserving casing and yielding to manual **Find & Replace** rules) and best-effort seeds the word into your `MUSE_STATS` voice dictionary when enabled.
+  * Tracks contradictions on untouched dictations to automatically retire false rules.
+  * **Auto-learn Toast notification (ON by default, toggleable):** Shows a brief `Rambler learned: "<heard>" → "<meant>"` toast whenever a new fix is automatically learned.
+  * **Review & Manage UI:** Open **Voice actions, snippets & replace → Auto-learn from fixes → Learned fixes** to view active/paused rules, **Pause / Resume / Delete**, promote pending `1/2` tracked fixes with **Learn now**, or **Clear all**.
+  * Included in portable `.json` Backup & Restore (toggles, learned/tracked records, and paused IDs).
+
+### ✨ Improvements
+
+* **Crisp Morphe patch cards:** Shortened all 7 patch descriptions so Morphe Manager displays clean, scannable cards without crowding.
+
 ## [1.3.4](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.3...v1.3.4) (2026-11-26)
 
 ### ✨ New Features
