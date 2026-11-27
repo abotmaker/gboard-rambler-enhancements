@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.6](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.5...v1.3.6) (2026-11-27)
+
+### ✨ Improvements
+
+* **Auto-Learn From My Fixes is now opt-in (Beta):**
+  * Defaults to **OFF** until explicitly enabled under **Voice actions, snippets & replace → Auto-learn from fixes (Beta)**.
+  * Adds a **`BETA`** pill badge next to the **Auto-learn from my fixes** toggle and hides the sub-rows while OFF (unless you already have saved learned fixes to review or clear).
+
 ## [1.3.5](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.4...v1.3.5) (2026-11-27)
 
 ### ✨ New Features

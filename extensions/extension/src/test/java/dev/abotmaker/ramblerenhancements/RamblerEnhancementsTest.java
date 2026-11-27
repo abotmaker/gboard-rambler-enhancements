@@ -1608,6 +1608,20 @@ public final class RamblerEnhancementsTest {
         pcn.before = "Hey ";
         pcn.after = "";
 
+        // Opt-in Beta: OFF by default so edits are not tracked until explicitly enabled.
+        assertFalse(RamblerEnhancementsSettings.readAutoLearnFixesEnabled(context));
+        RamblerTextPipeline.processCommitText(pcn, "use clod daily");
+        pcn.before = "Hey use Claude daily";
+        RamblerLearnedFixesTracker.onAppInputContextChanged(
+                new FakePdg(pcn.before, pcn.after, FakePdgReason.IME));
+        RamblerLearnedFixesTracker.onExtensionDeactivate();
+        assertTrue(RamblerLearnedFixes.readRecords(context).isEmpty());
+
+        // Enable Auto-learn from my fixes (Beta) in settings.
+        RamblerEnhancementsSettings.writeAutoLearnFixesEnabled(context, true);
+        pcn.before = "Hey ";
+        pcn.after = "";
+
         // Dictation 1: "use clod daily" -> user corrects to "use Claude daily" -> settled by voice start.
         assertEquals("use clod daily", RamblerTextPipeline.processCommitText(pcn, "use clod daily"));
         pcn.before = "Hey use clod daily";

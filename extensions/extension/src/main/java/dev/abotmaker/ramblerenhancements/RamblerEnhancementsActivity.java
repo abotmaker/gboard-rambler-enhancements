@@ -7,7 +7,9 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -442,7 +444,7 @@ public final class RamblerEnhancementsActivity extends Activity {
                 badge = "Send ON";
             } else if (searchOn) {
                 badge = "Search ON";
-            } else if (learnedActiveCount > 0) {
+            } else if (autoLearnOn && learnedActiveCount > 0) {
                 badge = learnedActiveCount + " learned";
             } else if (snippetCount + replaceCount > 0) {
                 int total = snippetCount + replaceCount;
@@ -1078,11 +1080,12 @@ public final class RamblerEnhancementsActivity extends Activity {
                         },
                         null));
 
-        addSectionHeader("Auto-learn from fixes");
+        addSectionHeader("Auto-learn from fixes (Beta)");
         boolean autoLearnOn = RamblerEnhancementsSettings.readAutoLearnFixesEnabled(this);
         addToggleRow(
                 "Auto-learn from my fixes",
-                "Watches each dictation locally in memory for 60s (never in password fields). After you fix the same misheard word twice, Rambler learns it automatically and retires false rules if you later keep the original.",
+                "BETA",
+                "Opt-in beta: watches each dictation locally in memory for 60s (never in password fields). After you fix the same misheard word twice, Rambler learns it automatically and retires false rules if you later keep the original.",
                 autoLearnOn,
                 checked -> {
                     RamblerEnhancementsSettings.writeAutoLearnFixesEnabled(this, checked);
@@ -1100,46 +1103,48 @@ public final class RamblerEnhancementsActivity extends Activity {
         }
         List<RamblerLearnedFixes.FixRecord> allLearnedRecords =
                 RamblerLearnedFixes.readRecords(this);
-        List<RamblerLearnedFixes.FixRecord> learnedList =
-                RamblerLearnedFixes.learned(allLearnedRecords);
-        java.util.Set<String> disabledLearnedIds = RamblerLearnedFixes.readDisabledIds(this);
-        int activeLearnedCount =
-                RamblerLearnedFixes.active(learnedList, disabledLearnedIds).size();
-        int pausedLearnedCount = Math.max(0, learnedList.size() - activeLearnedCount);
-        int trackingLearnedCount = RamblerLearnedFixes.tracking(allLearnedRecords).size();
-        String learnedBadge;
-        if (activeLearnedCount > 0) {
-            learnedBadge = activeLearnedCount + " active";
-        } else if (trackingLearnedCount > 0) {
-            learnedBadge = trackingLearnedCount + " tracking";
-        } else if (pausedLearnedCount > 0) {
-            learnedBadge = pausedLearnedCount + " paused";
-        } else {
-            learnedBadge = "0 learned";
-        }
-        String learnedSummary;
-        if (learnedList.isEmpty() && trackingLearnedCount == 0) {
-            learnedSummary = "No learned fixes yet. Fix a misheard word twice after dictating and Rambler will auto-learn it.";
-        } else {
-            List<String> learnedParts = new ArrayList<String>();
+        if (autoLearnOn || !allLearnedRecords.isEmpty()) {
+            List<RamblerLearnedFixes.FixRecord> learnedList =
+                    RamblerLearnedFixes.learned(allLearnedRecords);
+            java.util.Set<String> disabledLearnedIds = RamblerLearnedFixes.readDisabledIds(this);
+            int activeLearnedCount =
+                    RamblerLearnedFixes.active(learnedList, disabledLearnedIds).size();
+            int pausedLearnedCount = Math.max(0, learnedList.size() - activeLearnedCount);
+            int trackingLearnedCount = RamblerLearnedFixes.tracking(allLearnedRecords).size();
+            String learnedBadge;
             if (activeLearnedCount > 0) {
-                learnedParts.add(activeLearnedCount + " active");
+                learnedBadge = activeLearnedCount + " active";
+            } else if (trackingLearnedCount > 0) {
+                learnedBadge = trackingLearnedCount + " tracking";
+            } else if (pausedLearnedCount > 0) {
+                learnedBadge = pausedLearnedCount + " paused";
+            } else {
+                learnedBadge = "0 learned";
             }
-            if (pausedLearnedCount > 0) {
-                learnedParts.add(pausedLearnedCount + " paused");
+            String learnedSummary;
+            if (learnedList.isEmpty() && trackingLearnedCount == 0) {
+                learnedSummary = "No learned fixes yet. Fix a misheard word twice after dictating and Rambler will auto-learn it.";
+            } else {
+                List<String> learnedParts = new ArrayList<String>();
+                if (activeLearnedCount > 0) {
+                    learnedParts.add(activeLearnedCount + " active");
+                }
+                if (pausedLearnedCount > 0) {
+                    learnedParts.add(pausedLearnedCount + " paused");
+                }
+                if (trackingLearnedCount > 0) {
+                    learnedParts.add(trackingLearnedCount + " tracking (1/2)");
+                }
+                learnedSummary = joinMiddleDot(learnedParts)
+                        + " · Tap to review, pause, promote, or delete.";
             }
-            if (trackingLearnedCount > 0) {
-                learnedParts.add(trackingLearnedCount + " tracking (1/2)");
-            }
-            learnedSummary = joinMiddleDot(learnedParts)
-                    + " · Tap to review, pause, promote, or delete.";
+            addRow(
+                    "Learned fixes",
+                    learnedSummary,
+                    learnedBadge,
+                    true,
+                    () -> RamblerProductivityDialogs.showLearnedFixesDialog(this, this::refreshUi));
         }
-        addRow(
-                "Learned fixes",
-                learnedSummary,
-                learnedBadge,
-                true,
-                () -> RamblerProductivityDialogs.showLearnedFixesDialog(this, this::refreshUi));
 
         addSectionHeader("Find & replace");
         List<RamblerTextPipeline.ReplaceRule> replaceRules =
@@ -1903,6 +1908,15 @@ public final class RamblerEnhancementsActivity extends Activity {
             String summary,
             boolean initialChecked,
             BooleanConsumer onToggle) {
+        addToggleRow(title, null, summary, initialChecked, onToggle);
+    }
+
+    private void addToggleRow(
+            String title,
+            String tagBadge,
+            String summary,
+            boolean initialChecked,
+            BooleanConsumer onToggle) {
         RamblerWaveformDialogs.Palette pal = RamblerWaveformDialogs.palette(this);
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -1915,12 +1929,41 @@ public final class RamblerEnhancementsActivity extends Activity {
         topLine.setOrientation(LinearLayout.HORIZONTAL);
         topLine.setGravity(Gravity.CENTER_VERTICAL);
 
+        LinearLayout titleWrap = new LinearLayout(this);
+        titleWrap.setOrientation(LinearLayout.HORIZONTAL);
+        titleWrap.setGravity(Gravity.CENTER_VERTICAL);
+
         TextView titleView = new TextView(this);
         titleView.setText(title);
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         titleView.setTypeface(Typeface.DEFAULT_BOLD);
         titleView.setTextColor(pal.primary);
-        topLine.addView(titleView, new LinearLayout.LayoutParams(
+        titleWrap.addView(titleView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        if (tagBadge != null && !tagBadge.isEmpty()) {
+            TextView pill = new TextView(this);
+            pill.setText(tagBadge);
+            pill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+            pill.setTypeface(Typeface.DEFAULT_BOLD);
+            pill.setTextColor(pal.accent);
+            pill.setPadding(dp(7), dp(2), dp(7), dp(2));
+            GradientDrawable pillBg = new GradientDrawable();
+            pillBg.setShape(GradientDrawable.RECTANGLE);
+            pillBg.setCornerRadius(dp(99));
+            pillBg.setColor(Color.argb(
+                    38, Color.red(pal.accent), Color.green(pal.accent), Color.blue(pal.accent)));
+            pillBg.setStroke(
+                    Math.max(1, dp(1)),
+                    Color.argb(110, Color.red(pal.accent), Color.green(pal.accent), Color.blue(pal.accent)));
+            pill.setBackground(pillBg);
+            LinearLayout.LayoutParams pillParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            pillParams.leftMargin = dp(8);
+            titleWrap.addView(pill, pillParams);
+        }
+
+        topLine.addView(titleWrap, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
 
         Switch toggle = new Switch(this);

@@ -114,7 +114,7 @@ public final class RamblerEnhancementsSettings {
     public static final String SPACEBAR_MODE_HOLD = "hold";
     public static final String SPACEBAR_MODE_TOGGLE = "toggle";
     public static final String DEFAULT_SPACEBAR_LONG_PRESS_MODE = SPACEBAR_MODE_HYBRID;
-    public static final boolean DEFAULT_AUTO_LEARN_FIXES = true;
+    public static final boolean DEFAULT_AUTO_LEARN_FIXES = false;
     public static final boolean DEFAULT_AUTO_LEARN_TOAST = true;
 
     private static final ThreadLocal<Boolean> IN_GBOARD_PREFS_LOOKUP = new ThreadLocal<Boolean>();

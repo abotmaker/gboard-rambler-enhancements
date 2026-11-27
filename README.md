@@ -21,7 +21,7 @@ Standalone [Morphe](https://morphe.software) patches for **Gboard Rambler** — 
 | Patch | What it adds |
 |---|---|
 | **Waveform Animation** | Hex Dot Scope & Android Wave (listening), Flow / Pulse / Sweep (processing), custom colors & glow tuning |
-| **Productivity Tools** | Long-press Spacebar trigger *(Smart Hybrid / Hold / Toggle)*, Auto-Learn From Fixes *(with toast & review UI)*, Smart Search Bars *(auto-strip period & per-app Auto-Search)*, Rambler toolbar button, Voice Send/Search, Snippets, Find & Replace, private Stats & History with 1-Tap Fix & Learn, Auto Retry, Longer Sessions, JSON Backup |
+| **Productivity Tools** | Long-press Spacebar trigger *(Smart Hybrid / Hold / Toggle)*, Auto-Learn From Fixes *(opt-in Beta, with toast & review UI)*, Smart Search Bars *(auto-strip period & per-app Auto-Search)*, Rambler toolbar button, Voice Send/Search, Snippets, Find & Replace, private Stats & History with 1-Tap Fix & Learn, Auto Retry, Longer Sessions, JSON Backup |
 | **Custom Instructions** | Default + per-app prompts, named rules, searchable app picker, disabled apps & per-app behavior overrides |
 | **Personal Dictionary** | Live `MUSE_STATS` voice dictionary with add, `.txt` import/export, remove & clear |
 | **Contact Names** | Auto-seeds up to 1,000 phone contacts into `MUSE_STATS` *(requires Personal Dictionary)* |
