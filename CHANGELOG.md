@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.7](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.6...v1.3.7) (2026-11-28)
+
+### ✨ New Features
+
+* **Opt-in Rambler Dictation Haptics:**
+  * Toggle **Dictation haptics** ON under **Dictation & reliability → Dictation behavior** (defaults to **OFF**; plays a click preview when enabled).
+  * Plays a crisp `EFFECT_CLICK` when Rambler starts listening (`onVoiceStart`) and a softer `EFFECT_TICK` when listening stops (`onListeningStop`), guarded against duplicate or unpaired stop callbacks.
+  * Respects Android's system **Touch feedback** setting (`HAPTIC_FEEDBACK_ENABLED`), uses `VibratorManager` on Android 12+ and `VibrationAttributes.USAGE_TOUCH` on Android 13+, and is included in portable `.json` Backup & Restore.
+
 ## [1.3.6](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.5...v1.3.6) (2026-11-27)
 
 ### ✨ Improvements
