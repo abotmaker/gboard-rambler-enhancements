@@ -866,7 +866,7 @@ public final class RamblerEnhancementsActivity extends Activity {
                     });
             addToggleRow(
                     "Dictation haptics",
-                    "Feel a click when Rambler starts listening and a softer tick when it stops. Uses Android's touch feedback setting.",
+                    "Feel a click when Rambler starts listening and a softer tick when it stops (works even when system Touch feedback is off).",
                     RamblerEnhancementsSettings.readDictationHapticsEnabled(this),
                     checked -> {
                         RamblerEnhancementsSettings.writeDictationHapticsEnabled(this, checked);

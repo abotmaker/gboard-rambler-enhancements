@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.8](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.7...v1.3.8) (2026-11-28)
+
+### 🐛 Bug Fixes
+
+* **Fix Dictation Haptics staying silent when Android "Touch feedback" is OFF:**
+  * Removed the early bailout on `Settings.System.HAPTIC_FEEDBACK_ENABLED == 0` for the explicit opt-in **Dictation haptics** toggle.
+  * On Android 13+, uses `USAGE_TOUCH` when system Touch feedback is ON and falls back to `USAGE_ALARM` (pure vibrator channel, no sound) when Touch feedback is OFF so `VibratorManagerService` does not silently drop the cue.
+  * Uses crisp hardware haptic primitives (`PRIMITIVE_CLICK` / `PRIMITIVE_TICK`) on Android 11+ when supported, with automatic fallbacks to `EFFECT_CLICK` / `EFFECT_TICK` and `createOneShot`.
+
 ## [1.3.7](https://github.com/abotmaker/gboard-rambler-enhancements/compare/v1.3.6...v1.3.7) (2026-11-28)
 
 ### ✨ New Features

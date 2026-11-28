@@ -118,11 +118,16 @@ public final class RamblerEnhancementsTest {
         RamblerDictationStats.onListeningStop();
         assertFalse(vibrator.isVibrating());
 
+        // When system Touch feedback is OFF, this explicit opt-in cue still vibrates
+        // using USAGE_ALARM so Android doesn't silently mute it.
         ShadowVibrator.reset();
         vibrator.setHasVibrator(true);
         Settings.System.putInt(app.getContentResolver(), Settings.System.HAPTIC_FEEDBACK_ENABLED, 0);
         RamblerDictationStats.onVoiceStart();
-        assertFalse(vibrator.isVibrating());
+        assertTrue(vibrator.isVibrating());
+        VibrationAttributes fallbackAttributes =
+                (VibrationAttributes) vibrator.getVibrationAttributesFromLastVibration();
+        assertEquals(VibrationAttributes.USAGE_ALARM, fallbackAttributes.getUsage());
 
         // Missing VIBRATE permission must fail silently without vibrating.
         ShadowVibrator.reset();
