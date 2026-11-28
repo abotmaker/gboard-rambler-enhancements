@@ -171,6 +171,7 @@ public final class RamblerDictationStats {
     private static volatile Clock clock = SYSTEM_CLOCK;
     private static long activeVoiceStartElapsedMs = 0L;
     private static long activeListeningStopElapsedMs = 0L;
+    private static boolean listeningCueActive = false;
     private static long lastCommitWallMs = 0L;
     private static String lastCommittedText = null;
 
@@ -188,6 +189,7 @@ public final class RamblerDictationStats {
             clock = SYSTEM_CLOCK;
             activeVoiceStartElapsedMs = 0L;
             activeListeningStopElapsedMs = 0L;
+            listeningCueActive = false;
             lastCommitWallMs = 0L;
             lastCommittedText = null;
         }
@@ -203,11 +205,13 @@ public final class RamblerDictationStats {
             synchronized (STATS_LOCK) {
                 activeVoiceStartElapsedMs = now;
                 activeListeningStopElapsedMs = 0L;
+                listeningCueActive = true;
             }
         } catch (Throwable throwable) {
             logWarningSafely("onVoiceStart stats hook failed", throwable);
         }
         RamblerLearnedFixesTracker.onVoiceStart();
+        RamblerDictationHaptics.playListeningCue(true);
     }
 
     /**
@@ -215,13 +219,19 @@ public final class RamblerDictationStats {
      * Uses 0 parameters so bytecode injection needs zero extra registers.
      */
     public static void onListeningStop() {
+        boolean shouldPlayStopCue = false;
         try {
             long now = clock.elapsedRealtime();
             synchronized (STATS_LOCK) {
+                shouldPlayStopCue = listeningCueActive;
+                listeningCueActive = false;
                 activeListeningStopElapsedMs = now;
             }
         } catch (Throwable throwable) {
             logWarningSafely("onListeningStop stats hook failed", throwable);
+        }
+        if (shouldPlayStopCue) {
+            RamblerDictationHaptics.playListeningCue(false);
         }
     }
 
@@ -260,6 +270,7 @@ public final class RamblerDictationStats {
                 long stopElapsed = activeListeningStopElapsedMs;
                 activeVoiceStartElapsedMs = 0L;
                 activeListeningStopElapsedMs = 0L;
+                listeningCueActive = false;
                 lastCommitWallMs = commitWall;
                 lastCommittedText = trimmed;
 
@@ -340,6 +351,7 @@ public final class RamblerDictationStats {
         synchronized (STATS_LOCK) {
             activeVoiceStartElapsedMs = 0L;
             activeListeningStopElapsedMs = 0L;
+            listeningCueActive = false;
         }
     }
 
@@ -360,6 +372,7 @@ public final class RamblerDictationStats {
         synchronized (STATS_LOCK) {
             activeVoiceStartElapsedMs = 0L;
             activeListeningStopElapsedMs = 0L;
+            listeningCueActive = false;
             lastCommitWallMs = 0L;
             lastCommittedText = null;
             SharedPreferences prefs = RamblerEnhancementsSettings.preferencesOrNull(context);

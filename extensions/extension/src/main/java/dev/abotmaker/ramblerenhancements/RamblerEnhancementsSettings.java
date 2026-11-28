@@ -71,6 +71,8 @@ public final class RamblerEnhancementsSettings {
             "pref_rambler_spacebar_long_press_rambler";
     public static final String PREF_KEY_SPACEBAR_LONG_PRESS_MODE =
             "pref_rambler_spacebar_long_press_mode";
+    public static final String PREF_KEY_DICTATION_HAPTICS_ENABLED =
+            "pref_rambler_dictation_haptics_enabled";
     public static final String PREF_KEY_AUTO_LEARN_FIXES =
             "pref_rambler_auto_learn_fixes";
     public static final String PREF_KEY_AUTO_LEARN_TOAST =
@@ -114,6 +116,7 @@ public final class RamblerEnhancementsSettings {
     public static final String SPACEBAR_MODE_HOLD = "hold";
     public static final String SPACEBAR_MODE_TOGGLE = "toggle";
     public static final String DEFAULT_SPACEBAR_LONG_PRESS_MODE = SPACEBAR_MODE_HYBRID;
+    public static final boolean DEFAULT_DICTATION_HAPTICS_ENABLED = false;
     public static final boolean DEFAULT_AUTO_LEARN_FIXES = false;
     public static final boolean DEFAULT_AUTO_LEARN_TOAST = true;
 
@@ -440,6 +443,11 @@ public final class RamblerEnhancementsSettings {
                 DEFAULT_SPACEBAR_LONG_PRESS_MODE));
     }
 
+    public static boolean readDictationHapticsEnabled(Context context) {
+        return readDedicatedBoolean(
+                context, PREF_KEY_DICTATION_HAPTICS_ENABLED, DEFAULT_DICTATION_HAPTICS_ENABLED);
+    }
+
     public static boolean readAutoLearnFixesEnabled(Context context) {
         return readDedicatedBoolean(
                 context, PREF_KEY_AUTO_LEARN_FIXES, DEFAULT_AUTO_LEARN_FIXES);
@@ -592,6 +600,10 @@ public final class RamblerEnhancementsSettings {
                 context,
                 PREF_KEY_SPACEBAR_LONG_PRESS_MODE,
                 normalizeSpacebarLongPressMode(mode));
+    }
+
+    public static boolean writeDictationHapticsEnabled(Context context, boolean enabled) {
+        return writeDedicatedBoolean(context, PREF_KEY_DICTATION_HAPTICS_ENABLED, enabled);
     }
 
     public static boolean writeAutoLearnFixesEnabled(Context context, boolean enabled) {

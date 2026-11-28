@@ -864,6 +864,17 @@ public final class RamblerEnhancementsActivity extends Activity {
                         RamblerEnhancementsSettings.writeStripTrailingPeriod(this, checked);
                         refreshUi();
                     });
+            addToggleRow(
+                    "Dictation haptics",
+                    "Feel a click when Rambler starts listening and a softer tick when it stops. Uses Android's touch feedback setting.",
+                    RamblerEnhancementsSettings.readDictationHapticsEnabled(this),
+                    checked -> {
+                        RamblerEnhancementsSettings.writeDictationHapticsEnabled(this, checked);
+                        if (checked) {
+                            RamblerDictationHaptics.playListeningCue(this, true);
+                        }
+                        refreshUi();
+                    });
 
             addSectionHeader("Session & reliability");
             addToggleRow(

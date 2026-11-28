@@ -5,6 +5,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import android.Manifest;
+import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -13,6 +15,10 @@ import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
+import android.os.VibrationAttributes;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.provider.Settings;
 import android.widget.FrameLayout;
 
 import org.junit.After;
@@ -20,8 +26,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.ConscryptMode;
+import org.robolectric.shadow.api.Shadow;
+import org.robolectric.shadows.ShadowVibrator;
+import org.robolectric.util.ReflectionHelpers;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -65,6 +75,62 @@ public final class RamblerEnhancementsTest {
         RamblerDynamicConfig.SHADER_COLLAPSING_FIELD = "i";
         RamblerDynamicConfig.SHADER_EXIT_FADE_FIELD = "j";
         RamblerDynamicConfig.SHADER_GLOBAL_ALPHA_FIELD = "o";
+    }
+
+    @Test
+    public void dictationHapticsFollowListeningCallbacksAndTouchFeedbackSetting() {
+        Application app = RuntimeEnvironment.getApplication();
+        Shadows.shadowOf(app).grantPermissions(Manifest.permission.VIBRATE);
+        ShadowVibrator vibrator = Shadow.extract(app.getSystemService(Vibrator.class));
+        vibrator.setHasVibrator(true);
+        Settings.System.putInt(app.getContentResolver(), Settings.System.HAPTIC_FEEDBACK_ENABLED, 1);
+
+        assertFalse(RamblerEnhancementsSettings.readDictationHapticsEnabled(app));
+        RamblerDictationStats.onVoiceStart();
+        assertFalse(vibrator.isVibrating());
+
+        assertTrue(RamblerEnhancementsSettings.writeDictationHapticsEnabled(app, true));
+        // Unpaired stop without an active listening session should not vibrate.
+        RamblerDictationStats.clearForTesting();
+        RamblerDictationStats.onListeningStop();
+        assertFalse(vibrator.isVibrating());
+
+        RamblerDictationStats.onVoiceStart();
+        assertTrue(vibrator.isVibrating());
+        // On API 31+, Robolectric records predefined effects as vibration segments.
+        List<?> startSegments = ReflectionHelpers.getStaticField(
+                ShadowVibrator.class, "vibrationEffectSegments");
+        assertEquals(Integer.valueOf(VibrationEffect.EFFECT_CLICK),
+                ReflectionHelpers.<Integer>callInstanceMethod(startSegments.get(0), "getEffectId"));
+        VibrationAttributes attributes =
+                (VibrationAttributes) vibrator.getVibrationAttributesFromLastVibration();
+        assertEquals(VibrationAttributes.USAGE_TOUCH, attributes.getUsage());
+
+        RamblerDictationStats.onListeningStop();
+        List<?> stopSegments = ReflectionHelpers.getStaticField(
+                ShadowVibrator.class, "vibrationEffectSegments");
+        assertEquals(Integer.valueOf(VibrationEffect.EFFECT_TICK),
+                ReflectionHelpers.<Integer>callInstanceMethod(stopSegments.get(0), "getEffectId"));
+
+        // Duplicate stop without a new start must be ignored.
+        ShadowVibrator.reset();
+        vibrator.setHasVibrator(true);
+        RamblerDictationStats.onListeningStop();
+        assertFalse(vibrator.isVibrating());
+
+        ShadowVibrator.reset();
+        vibrator.setHasVibrator(true);
+        Settings.System.putInt(app.getContentResolver(), Settings.System.HAPTIC_FEEDBACK_ENABLED, 0);
+        RamblerDictationStats.onVoiceStart();
+        assertFalse(vibrator.isVibrating());
+
+        // Missing VIBRATE permission must fail silently without vibrating.
+        ShadowVibrator.reset();
+        vibrator.setHasVibrator(true);
+        Settings.System.putInt(app.getContentResolver(), Settings.System.HAPTIC_FEEDBACK_ENABLED, 1);
+        Shadows.shadowOf(app).denyPermissions(Manifest.permission.VIBRATE);
+        RamblerDictationStats.onVoiceStart();
+        assertFalse(vibrator.isVibrating());
     }
 
     @Test
@@ -710,6 +776,7 @@ public final class RamblerEnhancementsTest {
         RamblerEnhancementsSettings.writeAppendOnly(context, true);
         RamblerEnhancementsSettings.writeAutoParallelRetryEnabled(context, true);
         RamblerEnhancementsSettings.writeMaxSessionSeconds(context, 900);
+        RamblerEnhancementsSettings.writeDictationHapticsEnabled(context, true);
         RamblerEnhancementsSettings.writeVoiceSendEnabled(context, true);
         RamblerEnhancementsSettings.writeVoiceSendTriggers(context, "fire away");
         RamblerCustomInstructionRules.upsertRule(
@@ -746,6 +813,7 @@ public final class RamblerEnhancementsTest {
         assertTrue(RamblerEnhancementsSettings.readAppendOnly(context));
         assertTrue(RamblerEnhancementsSettings.readAutoParallelRetryEnabled(context));
         assertEquals(900, RamblerEnhancementsSettings.readMaxSessionSeconds(context));
+        assertTrue(RamblerEnhancementsSettings.readDictationHapticsEnabled(context));
         assertTrue(RamblerEnhancementsSettings.readVoiceSendEnabled(context));
         assertEquals("fire away", RamblerEnhancementsSettings.readVoiceSendTriggers(context));
         assertEquals("Default prompt", fakeCustomInstr[0]);

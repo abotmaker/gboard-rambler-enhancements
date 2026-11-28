@@ -103,6 +103,8 @@ public final class RamblerBackupManager {
                     RamblerEnhancementsSettings.readSpacebarLongPressRamblerEnabled(context));
             behavior.put("spacebarLongPressMode",
                     RamblerEnhancementsSettings.readSpacebarLongPressMode(context));
+            behavior.put("dictationHapticsEnabled",
+                    RamblerEnhancementsSettings.readDictationHapticsEnabled(context));
             behavior.put("autoLearnFixesEnabled",
                     RamblerEnhancementsSettings.readAutoLearnFixesEnabled(context));
             behavior.put("autoLearnToastEnabled",
@@ -311,6 +313,13 @@ public final class RamblerBackupManager {
                             behavior.optString(
                                     "spacebarLongPressMode",
                                     RamblerEnhancementsSettings.DEFAULT_SPACEBAR_LONG_PRESS_MODE));
+                }
+                if (behavior.has("dictationHapticsEnabled")) {
+                    RamblerEnhancementsSettings.writeDictationHapticsEnabled(
+                            context,
+                            behavior.optBoolean(
+                                    "dictationHapticsEnabled",
+                                    RamblerEnhancementsSettings.DEFAULT_DICTATION_HAPTICS_ENABLED));
                 }
                 if (behavior.has("autoLearnFixesEnabled")) {
                     RamblerEnhancementsSettings.writeAutoLearnFixesEnabled(
